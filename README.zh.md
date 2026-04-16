@@ -10,6 +10,20 @@ incipit 把这个聊天面板改造成一个经过完整设计的阅读环境，
 
 ---
 
+<p align="center">
+  <img src="docs/screenshots/typography.png" width="360" alt="衬线排版与中英文混排" />
+  <img src="docs/screenshots/math.png" width="360" alt="KaTeX 数学公式渲染" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/tables.png" width="360" alt="Booktabs 风格表格" />
+  <img src="docs/screenshots/blockquotes.png" width="360" alt="嵌套引用与中英古文" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/toolcalls.png" width="360" alt="工具调用、用户气泡与上下文监控" />
+</p>
+
+---
+
 ## 安装
 
 需要 Node.js 16 或更新。

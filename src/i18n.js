@@ -75,6 +75,10 @@ const STRINGS = {
     'restore.done':             'Restored {restored} files, skipped {skipped}.',
     'restore.reload_hint':      'Run Developer: Reload Window in VS Code to reload.',
 
+    // --- update check ---
+    'update.available':         'Update available: {current} → {latest}',
+    'update.command':           'Run: npm install -g incipit',
+
     // --- first-run language picker ---
     'picker.heading':           'Please choose your language  /  请选择语言',
     'picker.option_zh':         '中文',
@@ -128,6 +132,10 @@ const STRINGS = {
     'restore.confirm':          '确认还原？(y/N)：',
     'restore.done':             '已还原 {restored} 个文件,跳过 {skipped} 个。',
     'restore.reload_hint':      '请在 VS Code 里执行 Developer: Reload Window 以生效。',
+
+    // --- update check ---
+    'update.available':         '发现新版本：{current} → {latest}',
+    'update.command':           '运行：npm install -g incipit',
 
     'picker.heading':           'Please choose your language  /  请选择语言',
     'picker.option_zh':         '中文',

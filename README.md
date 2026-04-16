@@ -12,6 +12,20 @@ incipit turns this chat panel into a fully designed reading environment. It is a
 
 ---
 
+<p align="center">
+  <img src="docs/screenshots/typography.png" width="360" alt="Serif typography with mixed CJK-English text" />
+  <img src="docs/screenshots/math.png" width="360" alt="KaTeX math rendering — calculus, linear algebra, Fourier transform" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/tables.png" width="360" alt="Booktabs-style tables with Unicode scripts" />
+  <img src="docs/screenshots/blockquotes.png" width="360" alt="Nested blockquotes with classical Chinese and English" />
+</p>
+<p align="center">
+  <img src="docs/screenshots/toolcalls.png" width="360" alt="Tool calls, user bubbles, and context/cache badge" />
+</p>
+
+---
+
 ## Install
 
 Requires Node.js 16 or later.

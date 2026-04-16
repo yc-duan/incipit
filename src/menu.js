@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('path');
+const https = require('https');
 const readline = require('readline');
 
 const {
@@ -262,6 +263,43 @@ function extractLangFlag(args) {
   return { forcedLang, rest };
 }
 
+function checkForUpdate() {
+  const pkg = require(path.join(PACKAGE_ROOT, 'package.json'));
+  const current = pkg.version;
+  return new Promise(resolve => {
+    const req = https.get(
+      `https://registry.npmjs.org/${pkg.name}/latest`,
+      { headers: { Accept: 'application/json' }, timeout: 4000 },
+      res => {
+        let body = '';
+        res.on('data', chunk => { body += chunk; });
+        res.on('end', () => {
+          try {
+            const latest = JSON.parse(body).version;
+            if (latest && latest !== current) {
+              resolve({ current, latest });
+            } else {
+              resolve(null);
+            }
+          } catch (_) { resolve(null); }
+        });
+      },
+    );
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+}
+
+function printUpdateNotice(info) {
+  if (!info) return;
+  console.log();
+  console.log(color(
+    t('update.available', { current: info.current, latest: info.latest }),
+    Ansi.YELLOW,
+  ));
+  console.log(color(t('update.command'), Ansi.GREY));
+}
+
 async function main(argv) {
   const { forcedLang, rest: args } = extractLangFlag(argv.slice(2));
   const interactive = !(
@@ -269,14 +307,25 @@ async function main(argv) {
     args[0] === 'apply' || args[0] === 'restore'
   );
 
+  const updateCheck = checkForUpdate();
+
   await resolveLocale({ interactive, forcedLang });
 
   if (args.includes('--help') || args.includes('-h')) {
     printHelp();
+    printUpdateNotice(await updateCheck);
     return 0;
   }
-  if (args[0] === 'apply')   return handleApply({ silent: true });
-  if (args[0] === 'restore') return handleRestore({ silent: true });
+  if (args[0] === 'apply') {
+    const code = await handleApply({ silent: true });
+    printUpdateNotice(await updateCheck);
+    return code;
+  }
+  if (args[0] === 'restore') {
+    const code = await handleRestore({ silent: true });
+    printUpdateNotice(await updateCheck);
+    return code;
+  }
 
   while (true) {
     renderMenu();
