@@ -1,6 +1,6 @@
 {
   "name": "incipit",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Typesetting patch for AI chat interfaces — designed for long-form reading",
   "bin": {
     "incipit": "bin/cli.js"

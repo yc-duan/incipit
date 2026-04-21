@@ -86,7 +86,7 @@
    ============================================================ */
 
 [data-incipit-message] {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* Calibrate the timeline marker dot and connector for the adjusted message
@@ -303,17 +303,23 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
    Headings use `Emphasis` and separate levels through size, spacing, and
    margins instead of heavier weight values.
    ============================================================ */
+/* H1 is visually downshifted to H2 size. Rationale: chat-context responses
+   semantically nest inside the page, so the page's true H1 is the session
+   title — messages should not emit a competing top-level heading. The DOM
+   still carries <h1> for assistive tech and anchor linking, but the visual
+   hierarchy collapses H1 onto H2. Margins keep a touch more breathing room
+   than H2 so consecutive sections still feel delineated. */
 [data-incipit-message] h1 {
   font-family: 'Emphasis', 'Reading', serif !important;
-  font-size: 1.42em;
+  font-size: 15px;
   font-weight: 400;
   margin: 1.8em 0 0.45em;
-  line-height: 1.32;
-  letter-spacing: -0.012em;
+  line-height: 1.36;
+  letter-spacing: -0.008em;
 }
 [data-incipit-message] h2 {
   font-family: 'Emphasis', 'Reading', serif !important;
-  font-size: 1.22em;
+  font-size: 15px;
   font-weight: 400;
   margin: 1.5em 0 0.4em;
   line-height: 1.36;
@@ -321,7 +327,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 }
 [data-incipit-message] h3 {
   font-family: 'Emphasis', 'Reading', serif !important;
-  font-size: 1.08em;
+  font-size: 14px;
   font-weight: 400;
   margin: 1.2em 0 0.3em;
   line-height: 1.44;
@@ -431,6 +437,14 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   display: block;
   width: 100%;
 }
+/* Pin LaTeX-environment math (matrix, align, cases, ...) to body font-size
+   so an inline env embedded in a heading does not compound heading em
+   scaling with KaTeX's own 1.21× and blow up the 2D delimiter layout.
+   Plain inline math like `$\frac{a}{b}$` is not affected — it keeps the
+   parent's font-size so it flows with the heading text around it. */
+.claude-math[data-tex-kind="env"] {
+  font-size: 13px;
+}
 .katex-display {
   margin: 1.1em auto !important;
   padding: 0.3em 0;
@@ -466,7 +480,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   font-family: 'Reading', 'IBM Plex Serif', Georgia,
                'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
                system-ui, serif !important;
-  font-size: 14px !important;
+  font-size: 13px !important;
   line-height: 1.55 !important;
 }
 
@@ -488,7 +502,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   font-family: 'Emphasis', 'Reading', 'IBM Plex Serif', Georgia,
                'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
                system-ui, serif !important;
-  font-size: 14px !important;
+  font-size: 13px !important;
   font-weight: 400 !important;
   font-variation-settings: normal;
 }

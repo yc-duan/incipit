@@ -58,7 +58,7 @@ const CHAT_FONT_FAMILY_STACK =
   "'IBM Plex Serif', Georgia, " +
   "'Microsoft YaHei UI', 'Microsoft YaHei', " +
   "'PingFang SC', system-ui, serif";
-const CHAT_FONT_SIZE = 14;
+const CHAT_FONT_SIZE = 13;
 
 // The complete list of VS Code user settings keys that `setChatFontToSerif`
 // may write. Exposed for the backup module so that it can snapshot these

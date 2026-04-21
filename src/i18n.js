@@ -31,6 +31,7 @@ const STRINGS = {
     'help.cmd_restore':         'open the backup restore menu',
     'help.cmd_help':            'show this help',
     'help.cmd_lang':            'reset the saved UI language',
+    'help.cmd_no_update_check': 'skip the npm-registry update check for this run',
     'help.reload_hint':         'After applying, run Developer: Reload Window in VS Code to reload the extension.',
     'help.upgrade_hint':        'When Claude Code upgrades, the patch is overwritten — just run incipit again.',
 
@@ -76,8 +77,13 @@ const STRINGS = {
     'restore.reload_hint':      'Run Developer: Reload Window in VS Code to reload.',
 
     // --- update check ---
-    'update.available':         'Update available: {current} → {latest}',
-    'update.command':           'Run: npm install -g incipit',
+    'update.available':         'A new version is available: {current} → {latest}',
+    'update.command':           'Run: npm install -g incipit@latest',
+    'update.prompt':            'Update now? [Y/n]: ',
+    'update.skipped':           'Continuing with the current version.',
+    'update.upgrading':         'Running: npm install -g incipit@latest',
+    'update.upgrade_succeeded': 'Upgrade complete. Please re-run incipit.',
+    'update.upgrade_failed':    'Upgrade failed. You can retry manually with: npm install -g incipit@latest',
 
     // --- first-run language picker ---
     'picker.heading':           'Please choose your language  /  请选择语言',
@@ -93,6 +99,7 @@ const STRINGS = {
     'help.cmd_restore':         '打开备份还原菜单',
     'help.cmd_help':            '显示本帮助',
     'help.cmd_lang':            '重置已保存的界面语言',
+    'help.cmd_no_update_check': '本次运行跳过 npm 源的新版本检查',
     'help.reload_hint':         '应用后请在 VS Code 里执行 Developer: Reload Window 让扩展重载。',
     'help.upgrade_hint':        'Claude Code 扩展升级后补丁会被覆盖,再跑一次 incipit 即可。',
 
@@ -135,7 +142,12 @@ const STRINGS = {
 
     // --- update check ---
     'update.available':         '发现新版本：{current} → {latest}',
-    'update.command':           '运行：npm install -g incipit',
+    'update.command':           '运行：npm install -g incipit@latest',
+    'update.prompt':            '现在升级？[Y/n]：',
+    'update.skipped':           '继续使用当前版本。',
+    'update.upgrading':         '正在执行：npm install -g incipit@latest',
+    'update.upgrade_succeeded': '升级完成。请重新运行 incipit。',
+    'update.upgrade_failed':    '升级失败。可手动执行：npm install -g incipit@latest',
 
     'picker.heading':           'Please choose your language  /  请选择语言',
     'picker.option_zh':         '中文',

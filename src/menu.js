@@ -3,6 +3,7 @@
 const path = require('path');
 const https = require('https');
 const readline = require('readline');
+const { spawn } = require('child_process');
 
 const {
   findLatestClaudeCodeExtension,
@@ -16,7 +17,13 @@ const {
   listAvailableBackups,
   restoreBackup,
 } = require('./backup');
-const { getLanguage, setLanguage, SUPPORTED_LANGUAGES } = require('./config');
+const {
+  getLanguage,
+  setLanguage,
+  SUPPORTED_LANGUAGES,
+  readConfig,
+  writeConfig,
+} = require('./config');
 const { t, setLocale } = require('./i18n');
 const {
   Ansi,
@@ -193,8 +200,9 @@ function printHelp() {
     ${Ansi.IVORY}incipit${Ansi.RESET}              ${t('help.cmd_default')}
     ${Ansi.IVORY}incipit apply${Ansi.RESET}        ${t('help.cmd_apply')}
     ${Ansi.IVORY}incipit restore${Ansi.RESET}      ${t('help.cmd_restore')}
-    ${Ansi.IVORY}incipit --help${Ansi.RESET}       ${t('help.cmd_help')}
-    ${Ansi.IVORY}incipit --lang zh|en${Ansi.RESET} ${t('help.cmd_lang')}
+    ${Ansi.IVORY}incipit --help${Ansi.RESET}            ${t('help.cmd_help')}
+    ${Ansi.IVORY}incipit --lang zh|en${Ansi.RESET}      ${t('help.cmd_lang')}
+    ${Ansi.IVORY}incipit --no-update-check${Ansi.RESET} ${t('help.cmd_no_update_check')}
 
   ${t('help.reload_hint')}
   ${t('help.upgrade_hint')}
@@ -243,14 +251,15 @@ async function resolveLocale({ interactive, forcedLang }) {
   return picked;
 }
 
-function extractLangFlag(args) {
+function extractFlags(args) {
   let forcedLang = null;
+  let noUpdateCheck = false;
   const rest = [];
-  for (let i = 0; i < args.length; i++) {
+  for (let i = 0; i < args.length; i += 1) {
     const a = args[i];
     if (a === '--lang' && i + 1 < args.length) {
       forcedLang = args[i + 1];
-      i++;
+      i += 1;
       continue;
     }
     const m = /^--lang=(.+)$/.exec(a);
@@ -258,40 +267,139 @@ function extractLangFlag(args) {
       forcedLang = m[1];
       continue;
     }
+    if (a === '--no-update-check') {
+      noUpdateCheck = true;
+      continue;
+    }
     rest.push(a);
   }
-  return { forcedLang, rest };
+  return { forcedLang, noUpdateCheck, rest };
 }
 
-function checkForUpdate() {
-  const pkg = require(path.join(PACKAGE_ROOT, 'package.json'));
-  const current = pkg.version;
+// Update-check pipeline. Two cooperating concerns live here:
+//
+//   1. Cache in `~/.incipit/config.json` under `lastUpdateCheck` (epoch ms)
+//      and `lastKnownLatest` (version string). A cold run HTTPs the npm
+//      registry; warm runs within 12h reuse the cached verdict.
+//   2. Opt-out channels — config flag `updateCheck: false`, env var
+//      `INCIPIT_NO_UPDATE_CHECK=1`, and CLI flag `--no-update-check`.
+//      Any one of them skips the check entirely (returns `reason: disabled`).
+//
+// Network and JSON errors are swallowed silently; a failed check is not a
+// reason to block the CLI. Callers branch only on `info.outdated === true`.
+const UPDATE_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const UPDATE_CHECK_TIMEOUT_MS = 2500;
+
+function isUpdateCheckDisabled() {
+  if (process.env.INCIPIT_NO_UPDATE_CHECK === '1') return true;
+  try {
+    const cfg = readConfig();
+    if (cfg && cfg.updateCheck === false) return true;
+  } catch (_) {}
+  return false;
+}
+
+// Integer compare with prerelease suffix stripped. Suffices for 0.x.y
+// numeric bumps; will need proper semver only once we start emitting
+// prerelease channels that coexist with stable.
+function compareVersions(a, b) {
+  const parse = v => String(v || '').split('-')[0].split('.').map(n => parseInt(n, 10) || 0);
+  const sa = parse(a), sb = parse(b);
+  const len = Math.max(sa.length, sb.length);
+  for (let i = 0; i < len; i += 1) {
+    const x = sa[i] || 0, y = sb[i] || 0;
+    if (x !== y) return x - y;
+  }
+  return 0;
+}
+
+function fetchLatestVersion(pkgName, timeoutMs) {
   return new Promise(resolve => {
-    const req = https.get(
-      `https://registry.npmjs.org/${pkg.name}/latest`,
-      { headers: { Accept: 'application/json' }, timeout: 4000 },
-      res => {
-        let body = '';
-        res.on('data', chunk => { body += chunk; });
-        res.on('end', () => {
-          try {
-            const latest = JSON.parse(body).version;
-            if (latest && latest !== current) {
-              resolve({ current, latest });
-            } else {
-              resolve(null);
-            }
-          } catch (_) { resolve(null); }
-        });
-      },
-    );
-    req.on('error', () => resolve(null));
-    req.on('timeout', () => { req.destroy(); resolve(null); });
+    let settled = false;
+    const finish = v => { if (!settled) { settled = true; resolve(v); } };
+    let req;
+    try {
+      req = https.get(
+        `https://registry.npmjs.org/${pkgName}/latest`,
+        { headers: { Accept: 'application/json' }, timeout: timeoutMs },
+        res => {
+          if (res.statusCode !== 200) { res.resume(); finish(null); return; }
+          let body = '';
+          res.on('data', c => { body += c; });
+          res.on('end', () => {
+            try {
+              const data = JSON.parse(body);
+              finish(typeof data.version === 'string' ? data.version : null);
+            } catch (_) { finish(null); }
+          });
+          res.on('error', () => finish(null));
+        },
+      );
+      req.on('error', () => finish(null));
+      req.on('timeout', () => { try { req.destroy(); } catch (_) {} finish(null); });
+    } catch (_) { finish(null); }
   });
 }
 
+async function checkForUpdate() {
+  let pkg;
+  try {
+    pkg = require(path.join(PACKAGE_ROOT, 'package.json'));
+  } catch (_) {
+    return { current: null, latest: null, outdated: false, reason: 'no-version' };
+  }
+  const current = pkg.version;
+
+  if (isUpdateCheckDisabled()) {
+    return { current, latest: null, outdated: false, reason: 'disabled' };
+  }
+
+  const cfg = readConfig() || {};
+  const now = Date.now();
+  const cachedLatest = typeof cfg.lastKnownLatest === 'string' ? cfg.lastKnownLatest : null;
+  const cachedAt = typeof cfg.lastUpdateCheck === 'number' ? cfg.lastUpdateCheck : 0;
+  const cacheFresh = cachedLatest && (now - cachedAt) < UPDATE_CACHE_MAX_AGE_MS;
+
+  if (cacheFresh) {
+    return {
+      current,
+      latest: cachedLatest,
+      outdated: compareVersions(current, cachedLatest) < 0,
+      reason: 'cache',
+    };
+  }
+
+  const latest = await fetchLatestVersion(pkg.name, UPDATE_CHECK_TIMEOUT_MS);
+  if (!latest) {
+    // Network error or stale cache: fall back to whatever we last knew.
+    if (cachedLatest) {
+      return {
+        current,
+        latest: cachedLatest,
+        outdated: compareVersions(current, cachedLatest) < 0,
+        reason: 'cache-stale',
+      };
+    }
+    return { current, latest: null, outdated: false, reason: 'network' };
+  }
+
+  try {
+    const next = readConfig() || {};
+    next.lastUpdateCheck = now;
+    next.lastKnownLatest = latest;
+    writeConfig(next);
+  } catch (_) {}
+
+  return {
+    current,
+    latest,
+    outdated: compareVersions(current, latest) < 0,
+    reason: 'fresh',
+  };
+}
+
 function printUpdateNotice(info) {
-  if (!info) return;
+  if (!info || !info.outdated) return;
   console.log();
   console.log(color(
     t('update.available', { current: info.current, latest: info.latest }),
@@ -300,31 +408,99 @@ function printUpdateNotice(info) {
   console.log(color(t('update.command'), Ansi.GREY));
 }
 
+// Spawns `npm install -g incipit@latest`, pipes stdio straight to the
+// terminal so the user sees npm's own progress output, and resolves with
+// the exit code. `shell: true` lets Windows `npm.cmd` and Unix `npm`
+// resolve through the system shell without platform-specific forks.
+function runNpmUpdate() {
+  return new Promise(resolve => {
+    try {
+      const child = spawn('npm install -g incipit@latest', {
+        stdio: 'inherit',
+        shell: true,
+      });
+      child.on('exit', code => resolve(code == null ? -1 : code));
+      child.on('error', () => resolve(-1));
+    } catch (_) {
+      resolve(-1);
+    }
+  });
+}
+
+// Interactive update prompt. Called once at the start of an interactive
+// session when `checkForUpdate` flagged an outdated install. Returns:
+//   'exit'   — user accepted, upgrade succeeded; caller should exit 0
+//   'skip'   — user declined; caller should continue into the menu
+//   'failed' — user accepted but upgrade failed; caller should continue
+async function handleUpdatePrompt(info) {
+  clearScreen();
+  console.log();
+  console.log('  ' + color(
+    t('update.available', { current: info.current, latest: info.latest }),
+    Ansi.YELLOW,
+  ));
+  console.log();
+
+  let raw = '';
+  try { raw = await prompt('  ' + t('update.prompt')); } catch (_) { return 'skip'; }
+  const ans = (raw || '').trim().toLowerCase();
+  if (ans !== '' && ans !== 'y' && ans !== 'yes') {
+    console.log();
+    console.log('  ' + color(t('update.skipped'), Ansi.GREY));
+    console.log();
+    return 'skip';
+  }
+
+  console.log();
+  console.log('  ' + color(t('update.upgrading'), Ansi.CYAN));
+  console.log();
+  const code = await runNpmUpdate();
+  console.log();
+  if (code === 0) {
+    console.log('  ' + color(t('update.upgrade_succeeded'), Ansi.GREEN));
+    console.log();
+    return 'exit';
+  }
+  console.log('  ' + color(t('update.upgrade_failed'), Ansi.RED));
+  console.log();
+  return 'failed';
+}
+
 async function main(argv) {
-  const { forcedLang, rest: args } = extractLangFlag(argv.slice(2));
+  const { forcedLang, noUpdateCheck, rest: args } = extractFlags(argv.slice(2));
   const interactive = !(
     args.includes('--help') || args.includes('-h') ||
     args[0] === 'apply' || args[0] === 'restore'
   );
 
-  const updateCheck = checkForUpdate();
+  // Fire-and-forget the update check so it overlaps with locale resolution
+  // and command execution. In non-interactive paths we print a notice at
+  // the end; in interactive we await before rendering the menu so the
+  // prompt comes first, while the user is still at the entry screen.
+  const updatePromise = noUpdateCheck ? Promise.resolve(null) : checkForUpdate();
 
   await resolveLocale({ interactive, forcedLang });
 
   if (args.includes('--help') || args.includes('-h')) {
     printHelp();
-    printUpdateNotice(await updateCheck);
+    printUpdateNotice(await updatePromise);
     return 0;
   }
   if (args[0] === 'apply') {
     const code = await handleApply({ silent: true });
-    printUpdateNotice(await updateCheck);
+    printUpdateNotice(await updatePromise);
     return code;
   }
   if (args[0] === 'restore') {
     const code = await handleRestore({ silent: true });
-    printUpdateNotice(await updateCheck);
+    printUpdateNotice(await updatePromise);
     return code;
+  }
+
+  const updateInfo = await updatePromise;
+  if (updateInfo && updateInfo.outdated) {
+    const outcome = await handleUpdatePrompt(updateInfo);
+    if (outcome === 'exit') return 0;
   }
 
   while (true) {

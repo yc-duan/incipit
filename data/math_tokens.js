@@ -62,6 +62,48 @@ const LIST_MARKER_ONLY_RE = new RegExp(
   `^[ \\t]{0,${MAX_SOFTBREAK_INDENT}}(?:[-*+]|\\d+[.)])[ \\t]*$`,
 );
 
+// Whitelist of LaTeX environments that should be recognized as display math
+// when emitted bare (no surrounding `$$` or `\[` delimiters). Large language
+// models frequently omit the outer delimiter when emitting matrices, cases,
+// and alignment environments, leaving the raw `\begin{..}..\end{..}` source
+// exposed in prose. KaTeX can render every name in this set in display mode
+// when passed the full `\begin..\end` block as tex input.
+//
+// Membership is deliberately narrow: only environments defined in KaTeX's
+// supported list. Unknown names fall through to the regular `\X` skip so an
+// unrecognized `\begin{foo}..\end{foo}` stays as literal text instead of
+// triggering a render error.
+const MATH_ENVIRONMENTS = new Set([
+  'align', 'align*',
+  'alignat', 'alignat*',
+  'aligned', 'alignedat',
+  'array',
+  'Bmatrix', 'Bmatrix*',
+  'bmatrix', 'bmatrix*',
+  'cases', 'cases*',
+  'CD',
+  'darray',
+  'dcases', 'dcases*',
+  'drcases',
+  'eqnarray', 'eqnarray*',
+  'equation', 'equation*',
+  'flalign', 'flalign*',
+  'gather', 'gather*',
+  'gathered',
+  'matrix', 'matrix*',
+  'multline', 'multline*',
+  'pmatrix', 'pmatrix*',
+  'rcases',
+  'smallmatrix',
+  'split',
+  'subarray',
+  'Vmatrix', 'Vmatrix*',
+  'vmatrix', 'vmatrix*',
+]);
+
+const BEGIN_PREFIX = '\\begin{';
+const MATH_ENV_NAME_CAPTURE_RE = /^([A-Za-z]+\*?)\}/;
+
 // Public: cheap prefilter for the preprocess path. `$` or `\` only.
 export function hasRawMathMarkers(text) {
   return typeof text === 'string' && text.length > 1 &&
@@ -130,7 +172,11 @@ function tokenizeRawMath(text) {
     if (skipMarkdownCode(state)) {
       continue;
     }
-    if (scanBackslashMath(state) || scanDollarMath(state)) {
+    if (
+      scanEnvironmentMath(state) ||
+      scanBackslashMath(state) ||
+      scanDollarMath(state)
+    ) {
       continue;
     }
     state.i += 1;
@@ -338,6 +384,106 @@ function startsWithContinuationText(text) {
 function buildPlaceholder(token) {
   const mode = token.display ? DISPLAY_PLACEHOLDER : INLINE_PLACEHOLDER;
   return PLACEHOLDER_PREFIX + mode + RUNTIME_TOKEN + encodeTex(token.tex) + PLACEHOLDER_SUFFIX;
+}
+
+// Bare-environment scan for `\begin{NAME}..\end{NAME}` blocks emitted without
+// outer `$$`/`\[` delimiters. Only fires on whitelisted environment names.
+// Unknown names return false so the generic `\X` skip in `scanBackslashMath`
+// handles them (advancing by two chars and leaving the remainder as text).
+//
+// Scan order matters: this runs before `scanDollarMath`, so an environment
+// wrapped in `$$..$$` is claimed by the dollar scanner whole — the `$` comes
+// first in source order, so when control reaches the `\` inside the dollar
+// block this function is not consulted. Code blocks are handled earlier by
+// `skipMarkdownCode`, which protects literal `\begin{..}` text quoted inside
+// fenced or inline code regions.
+//
+// Nesting uses same-name depth counting only. A `\begin{pmatrix}` inside a
+// `\begin{pmatrix}` is tracked, but a `\begin{bmatrix}` inside `\begin{pmatrix}`
+// is ignored as far as this scan is concerned — the outer `\end{pmatrix}` is
+// still found correctly because the closer is a different literal string.
+function hasSameLineProseBefore(text, pos) {
+  for (let j = pos - 1; j >= 0; j -= 1) {
+    const ch = text[j];
+    if (ch === '\n') return false;
+    if (ch !== ' ' && ch !== '\t' && ch !== '\r') return true;
+  }
+  return false;
+}
+
+function hasSameLineProseAfter(text, pos) {
+  for (let j = pos; j < text.length; j += 1) {
+    const ch = text[j];
+    if (ch === '\n') return false;
+    if (ch !== ' ' && ch !== '\t' && ch !== '\r') return true;
+  }
+  return false;
+}
+
+function scanEnvironmentMath(state) {
+  const { text, i } = state;
+  if (text[i] !== '\\' || isBackslashEscaped(text, i)) {
+    return false;
+  }
+
+  if (text.slice(i, i + BEGIN_PREFIX.length) !== BEGIN_PREFIX) {
+    return false;
+  }
+
+  const nameStart = i + BEGIN_PREFIX.length;
+  const nameMatch = MATH_ENV_NAME_CAPTURE_RE.exec(text.slice(nameStart));
+  if (!nameMatch) {
+    return false;
+  }
+
+  const name = nameMatch[1];
+  if (!MATH_ENVIRONMENTS.has(name)) {
+    return false;
+  }
+
+  const headerEnd = nameStart + nameMatch[0].length;
+  const openMarker = `\\begin{${name}}`;
+  const closeMarker = `\\end{${name}}`;
+
+  let depth = 1;
+  let pos = headerEnd;
+  while (pos < text.length) {
+    const nextClose = text.indexOf(closeMarker, pos);
+    if (nextClose === -1) {
+      markIncomplete(state);
+      return true;
+    }
+    const nextOpen = text.indexOf(openMarker, pos);
+    if (nextOpen !== -1 && nextOpen < nextClose) {
+      depth += 1;
+      pos = nextOpen + openMarker.length;
+      continue;
+    }
+    depth -= 1;
+    pos = nextClose + closeMarker.length;
+    if (depth === 0) {
+      // Decide display vs. inline from the surrounding source line. If any
+      // non-whitespace character sits on the same markdown line before the
+      // `\begin` or after the `\end`, the author clearly meant the block to
+      // flow with the prose (inline). An environment alone on its line has
+      // no surrounding text and renders as display. This matches both the
+      // common `A = \begin{pmatrix}..\end{pmatrix}` inline pattern and the
+      // standalone equation block that occupies its own paragraph.
+      const inline =
+        hasSameLineProseBefore(text, i) || hasSameLineProseAfter(text, pos);
+      pushMathToken(state, {
+        type: 'math',
+        display: !inline,
+        tex: text.slice(i, pos),
+        rawStart: i,
+        rawEnd: pos,
+      });
+      return true;
+    }
+  }
+
+  markIncomplete(state);
+  return true;
 }
 
 function scanBackslashMath(state) {

@@ -227,10 +227,21 @@ import { renderMathInSegment as rewriteMathInSegment } from './math_rewriter.js'
     return fixed;
   }
 
+  const ENV_TEX_PROBE_RE = /\\begin\{[A-Za-z]+\*?\}/;
+
   function renderTokenToNode(tok) {
     const node = document.createElement(tok.display ? 'div' : 'span');
     node.setAttribute('data-tex-source', tok.tex);
     node.setAttribute('data-tex-display', tok.display ? '1' : '0');
+    // Tex containing a LaTeX environment (matrix/align/cases/...) is marked
+    // so theme.css can pin its font-size to body scale. Without this an
+    // inline env embedded in a heading inherits heading em scaling, which
+    // compounds with KaTeX's own 1.21× factor and balloons the 2D delimiter
+    // layout visually. Detection is content-based so env math picked up via
+    // bare `\begin..\end`, `$..$`, or `$$..$$` all receive the same treatment.
+    if (ENV_TEX_PROBE_RE.test(tok.tex)) {
+      node.setAttribute('data-tex-kind', 'env');
+    }
     node.className = 'claude-math';
     try {
       node.innerHTML = window.katex.renderToString(
