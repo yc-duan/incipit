@@ -108,12 +108,6 @@ If Claude Code ever ships an official theming or style injection API, this proje
 
 ---
 
-## Acknowledgements
-
-Thanks to the [linuxdo](https://linux.do/) community for discussion, sharing, and feedback.
-
----
-
 ## License
 
 MIT. See [LICENSE](LICENSE).
