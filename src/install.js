@@ -19,8 +19,11 @@ const { HOST_BADGE_COMM_ATTACH } = require('./badge-iife');
 // constants
 // ============================================================
 
+const { getFeatures, getTheme, BODY_FONT_SIZE_OPTIONS } = require('./config');
+
 const CLAUDE_CODE_EXTENSION_PREFIX = 'anthropic.claude-code-';
 const ENHANCE_TARGET_NAME = 'enhance.js';
+const THEME_TARGET_NAME = 'theme.css';
 
 // Root-level webview files as `[sourceRelativePath, targetFileName]`.
 // `theme.css` stays separate from the JS template string so CSS comments and
@@ -31,7 +34,7 @@ const ROOT_WEBVIEW_FILES = [
   [path.join('data', 'host-badge.cjs'),          'host-badge.cjs'],
   [path.join('data', 'math_tokens.js'),         'math_tokens.js'],
   [path.join('data', 'math_rewriter.js'),       'math_rewriter.js'],
-  [path.join('data', 'theme.css'),              'theme.css'],
+  [path.join('data', 'theme.css'),              THEME_TARGET_NAME],
 ];
 
 const CDN_HOST = 'https://cdnjs.cloudflare.com';
@@ -281,6 +284,38 @@ function copyIfChanged(srcPath, dstPath) {
   return true;
 }
 
+// Copy with a text transform. Used for enhance.js (prepends a frozen
+// `globalThis.__incipitConfig` preamble) and theme.css (appends a `:root`
+// block carrying the body font-size). Transforms are pure functions of
+// source content + user config, so destination equality with the
+// transformed string is a perfect idempotency check.
+function copyWithTransform(srcPath, dstPath, transform) {
+  const srcContent = fs.readFileSync(srcPath, 'utf8');
+  const transformed = transform(srcContent);
+  if (fs.existsSync(dstPath)) {
+    try {
+      const existing = fs.readFileSync(dstPath, 'utf8');
+      if (existing === transformed) return false;
+    } catch (_) { /* fall through to write */ }
+  }
+  fs.mkdirSync(path.dirname(dstPath), { recursive: true });
+  fs.writeFileSync(dstPath, transformed, 'utf8');
+  return true;
+}
+
+function buildEnhancePreamble(features) {
+  const json = JSON.stringify({ features });
+  return '// incipit user config (generated at apply; do not edit)\n' +
+         `globalThis.__incipitConfig = Object.freeze(${json});\n\n`;
+}
+
+function buildThemeOverrideBlock(theme) {
+  return '\n\n/* incipit user theme overrides (generated at apply; do not edit) */\n' +
+         ':root {\n' +
+         `  --incipit-body-size: ${theme.bodyFontSize}px;\n` +
+         '}\n';
+}
+
 // Recursively list all files relative to `root`.
 function walkFiles(root) {
   const out = [];
@@ -432,8 +467,11 @@ function installSerifSystemFonts(resourceRoot) {
 // settings.json: `chat.fontFamily` / `chat.fontSize`
 // ============================================================
 
-// Return whether either setting changed.
-function setChatFontToSerif() {
+// Return whether either setting changed. `fontSize` must be one of the
+// discrete body-size options; the caller is expected to pass `getTheme()
+// .bodyFontSize` but a stray value falls back to the default.
+function setChatFontToSerif(fontSize) {
+  const size = BODY_FONT_SIZE_OPTIONS.includes(fontSize) ? fontSize : CHAT_FONT_SIZE;
   const settingsPath = vscodeUserSettingsPath();
   const parent = path.dirname(settingsPath);
   if (!fs.existsSync(parent)) {
@@ -457,13 +495,13 @@ function setChatFontToSerif() {
 
   if (
     data['chat.fontFamily'] === CHAT_FONT_FAMILY_STACK &&
-    data['chat.fontSize'] === CHAT_FONT_SIZE
+    data['chat.fontSize'] === size
   ) {
     return false;
   }
 
   data['chat.fontFamily'] = CHAT_FONT_FAMILY_STACK;
-  data['chat.fontSize'] = CHAT_FONT_SIZE;
+  data['chat.fontSize'] = size;
   fs.mkdirSync(parent, { recursive: true });
   fs.writeFileSync(
     settingsPath,
@@ -621,12 +659,24 @@ function installClaudeCodeVSCodeEnhance(resourceRoot, options = {}) {
   const target = findLatestClaudeCodeExtension(home);
   const webviewDir = path.dirname(target.webviewIndexJsPath);
 
+  const features = getFeatures();
+  const theme = getTheme();
+  const enhancePreamble = buildEnhancePreamble(features);
+  const themeOverrideBlock = buildThemeOverrideBlock(theme);
+
   const rootResourceStatuses = [];
   let enhanceScriptWritten = false;
   for (const [relativePath, targetName] of ROOT_WEBVIEW_FILES) {
     const src = resourceFilePath(resourceRoot, relativePath);
     const dst = path.join(webviewDir, targetName);
-    const written = copyIfChanged(src, dst);
+    let written;
+    if (targetName === ENHANCE_TARGET_NAME) {
+      written = copyWithTransform(src, dst, content => enhancePreamble + content);
+    } else if (targetName === THEME_TARGET_NAME) {
+      written = copyWithTransform(src, dst, content => content + themeOverrideBlock);
+    } else {
+      written = copyIfChanged(src, dst);
+    }
     if (targetName === ENHANCE_TARGET_NAME) enhanceScriptWritten = written;
     const label = `${targetName} 复制`;
     rootResourceStatuses.push(
@@ -680,11 +730,13 @@ function installClaudeCodeVSCodeEnhance(resourceRoot, options = {}) {
 
   // System fonts plus `chat.fontFamily` / `chat.fontSize`.
   const serifWritten = installSerifSystemFonts(resourceRoot);
-  const chatFontUpdated = setChatFontToSerif();
+  const chatFontUpdated = setChatFontToSerif(theme.bodyFontSize);
   const serifStatus = serifWritten > 0
     ? `已写入 ${serifWritten}/${SYSTEM_FONT_FILES.length}`
     : `已存在 (${SYSTEM_FONT_FILES.length} 个)`;
-  const chatFontStatus = chatFontUpdated ? `已更新 → Plex Serif ${CHAT_FONT_SIZE}px` : '已是目标值';
+  const chatFontStatus = chatFontUpdated
+    ? `已更新 → Plex Serif ${theme.bodyFontSize}px`
+    : '已是目标值';
 
   const statusLines = [
     ...rootResourceStatuses,
@@ -705,6 +757,8 @@ function installClaudeCodeVSCodeEnhance(resourceRoot, options = {}) {
     serifFontsInstalled: serifWritten,
     chatFontSettingUpdated: chatFontUpdated,
     statusLines,
+    features,
+    theme,
   };
 }
 

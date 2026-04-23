@@ -13,15 +13,16 @@ incipit turns this chat panel into a fully designed reading environment. It is a
 ---
 
 <p align="center">
-  <img src="docs/screenshots/typography.png" width="360" alt="Serif typography with mixed CJK-English text" />
-  <img src="docs/screenshots/math.png" width="360" alt="KaTeX math rendering — calculus, linear algebra, Fourier transform" />
+  <img src="docs/screenshots/math.png" width="360" alt="KaTeX math rendering — Seeley–DeWitt coefficients and renormalization group equations" />
+  <img src="docs/screenshots/blockquotes.png" width="360" alt="Nested blockquotes and underlined links" />
 </p>
 <p align="center">
-  <img src="docs/screenshots/tables.png" width="360" alt="Booktabs-style tables with Unicode scripts" />
-  <img src="docs/screenshots/blockquotes.png" width="360" alt="Nested blockquotes with classical Chinese and English" />
+  <img src="docs/screenshots/tables.png" width="360" alt="Booktabs-style tables with model benchmarks and feature matrix" />
+  <img src="docs/screenshots/lists.png" width="360" alt="Mixed ordered and unordered lists with checkboxes" />
 </p>
 <p align="center">
-  <img src="docs/screenshots/toolcalls.png" width="360" alt="Tool calls, user bubbles, and context/cache badge" />
+  <img src="docs/screenshots/code.png" width="360" alt="Inline and multi-line code blocks with syntax highlighting" />
+  <img src="docs/screenshots/toolcalls.png" width="360" alt="Tool calls — Write operations with truncated paths and +N/-M diff stats" />
 </p>
 
 ---
@@ -40,7 +41,7 @@ Then:
 incipit
 ```
 
-On first run you'll choose a language, then enter an interactive menu showing the current extension path, backup status, and options to apply or restore. Every apply is automatically backed up beforehand.
+On first run you'll choose a language, then enter an interactive menu showing the current extension path, backup status, and options to apply or restore. Every apply is automatically backed up beforehand; for `settings.json` we only record the keys we modify, not the whole file, so your other VS Code settings cannot be accidentally overwritten on restore.
 
 To skip the menu:
 
@@ -63,7 +64,11 @@ incipit is a complete redesign of the chat interface, covering typography, rende
 
 **Interaction fixes.** The stock Claude Code has a problem: thinking blocks you manually expand will all auto-open when new content streams in, causing the viewport to jump. incipit fixes this — only the thinking block you selected stays open. User message bubbles get a copy button, and long messages can be collapsed and expanded.
 
+**Tool calls.** Every Claude Code response may contain tool calls — file reads, file edits, shell commands, code searches. The stock rendering is crude: Edit collapses to `Added X lines` with no visible diff, and other tools leave their full output occupying the viewport, so long conversations disappear under diff editors. incipit rewrites this layer. Edit / MultiEdit / Write calls are parsed from the underlying payload and shown with a precise `+N / -M` line count next to the filename; other tools keep the host's short summary as an identifier. Every tool call is collapsed by default, and the expand chevron uses the same animation as thinking blocks. Clicking anywhere on the row toggles the fold; the file path itself stays text-selectable.
+
 **Context and cache monitoring.** A persistent badge sits at the bottom of the input box, showing current context size and cache hit rate. Click it to see per-turn breakdowns and cumulative session statistics. This data comes from Claude Code's local log files and involves no network requests.
+
+**Command-line tool.** Running `incipit` without arguments opens an interactive menu showing the current extension path and backup status, navigated with arrow keys or j/k, space to toggle, enter to confirm. Both English and Chinese are supported (prompted on first run). The menu lets you toggle math rendering, the session usage badge, and tool-call folding, and switch the body font size (12/13/14). Each launch checks npm for a newer version (cached for 12 hours, skippable with `--no-update-check`) and offers to run the upgrade for you. `incipit apply` and `incipit restore` are non-interactive subcommands that emit no prompts, so they are safe to run in CI or scripts.
 
 ---
 
@@ -100,6 +105,12 @@ Linux and macOS should work in theory, but have not been verified on actual hard
 VS Code enforces strict sandbox isolation between extensions — one extension cannot inject scripts or styles into another's webview. The only way to change how Claude Code's chat renders is to modify its local bundle files directly. That's why incipit takes the patching approach.
 
 If Claude Code ever ships an official theming or style injection API, this project will migrate to that path immediately and the patching approach will be archived.
+
+---
+
+## Acknowledgements
+
+Thanks to the [linuxdo](https://linux.do/) community for discussion, sharing, and feedback.
 
 ---
 

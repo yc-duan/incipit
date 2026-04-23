@@ -41,10 +41,18 @@ const STRINGS = {
     // --- menu table of contents ---
     'menu.apply':               'Apply typesetting patch',
     'menu.restore':             'Restore backup',
+    'menu.configure':           'Configure',
     'menu.quit':                'Quit',
     'menu.invalid':             'Invalid input.',
     'menu.operation_failed':    'Operation failed: {msg}',
     'menu.press_enter':         'Press Enter to continue ...',
+    'menu.tty_required':        'Interactive menu requires a terminal.',
+    'menu.tty_hint':            'For non-interactive use, pass one of: incipit apply / incipit restore / incipit --help',
+
+    // --- interactive keyboard hints (shown at the bottom of each screen) ---
+    'hint.main':                '↑↓ move · Enter select · q quit',
+    'hint.configure':           '↑↓ move · Space toggle · Enter open · b back',
+    'hint.picker':              '↑↓ move · Enter confirm · b back',
 
     // --- apply flow ---
     'apply.title':              '[ Apply Claude Code typesetting patch ]',
@@ -90,6 +98,28 @@ const STRINGS = {
     'picker.option_zh':         '中文',
     'picker.option_en':         'English',
     'picker.prompt':            '1 / 2 : ',
+
+    // --- configure menu ---
+    'configure.heading':        '── Configure ──',
+    'configure.feature_math':   'Math formula rendering',
+    'configure.feature_session':'Session usage',
+    'configure.feature_tool_fold':'Tool-call fold',
+    'configure.param_body_size':'Body font size',
+    'configure.reset':          'Reset defaults',
+    'configure.back':           'Back',
+    'configure.on':             'on',
+    'configure.off':            'off',
+    'configure.reset_confirm':  'Reset features and body font size to defaults? (y/N): ',
+    'configure.reset_done':     'Configuration reset.',
+    'configure.saved_hint':     'Saved. Re-run 1. Apply to activate.',
+    'configure.body_size_heading':'Body font size',
+    'configure.body_size_default_mark':'(default)',
+
+    // --- apply result summary ---
+    'apply.summary_heading':    'Current configuration',
+    'apply.summary_on':         'on',
+    'apply.summary_off':        'off',
+    'apply.summary_hint':       "Use '3. Configure' to adjust; re-run '1. Apply' to activate.",
   },
   zh: {
     // --- help ---
@@ -107,10 +137,18 @@ const STRINGS = {
 
     'menu.apply':               '应用排版补丁',
     'menu.restore':             '还原备份',
+    'menu.configure':           '配置',
     'menu.quit':                '退出',
     'menu.invalid':             '无效输入。',
     'menu.operation_failed':    '操作失败：{msg}',
     'menu.press_enter':         '按回车继续...',
+    'menu.tty_required':        '交互菜单需在终端中运行。',
+    'menu.tty_hint':            '非交互场景请使用：incipit apply / incipit restore / incipit --help',
+
+    // --- interactive keyboard hints (shown at the bottom of each screen) ---
+    'hint.main':                '↑↓ 移动 · 回车 确认 · q 退出',
+    'hint.configure':           '↑↓ 移动 · 空格 切换 · 回车 进入 · b 返回',
+    'hint.picker':              '↑↓ 移动 · 回车 确认 · b 返回',
 
     'apply.title':              '[应用 Claude Code 排版补丁]',
     'apply.extension_header':   'Claude Code 扩展',
@@ -153,6 +191,28 @@ const STRINGS = {
     'picker.option_zh':         '中文',
     'picker.option_en':         'English',
     'picker.prompt':            '1 / 2 : ',
+
+    // --- configure menu ---
+    'configure.heading':        '── 配置 ──',
+    'configure.feature_math':   '数学公式渲染',
+    'configure.feature_session':'会话用量',
+    'configure.feature_tool_fold':'工具调用折叠',
+    'configure.param_body_size':'正文字号',
+    'configure.reset':          '重置默认',
+    'configure.back':           '返回',
+    'configure.on':             '启用',
+    'configure.off':            '关闭',
+    'configure.reset_confirm':  '将功能开关和正文字号重置为默认？(y/N)：',
+    'configure.reset_done':     '已重置。',
+    'configure.saved_hint':     '已保存。重跑 1. 应用排版补丁 使更改生效。',
+    'configure.body_size_heading':'正文字号',
+    'configure.body_size_default_mark':'(默认)',
+
+    // --- apply result summary ---
+    'apply.summary_heading':    '当前配置',
+    'apply.summary_on':         '启用',
+    'apply.summary_off':        '关闭',
+    'apply.summary_hint':       '提示：`3. 配置` 可调整，改动后重跑 `1. 应用排版补丁` 生效。',
   },
 };
 

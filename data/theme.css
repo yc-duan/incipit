@@ -86,7 +86,7 @@
    ============================================================ */
 
 [data-incipit-message] {
-  font-size: 13px;
+  font-size: var(--incipit-body-size, 13px);
 }
 
 /* Calibrate the timeline marker dot and connector for the adjusted message
@@ -443,7 +443,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
    Plain inline math like `$\frac{a}{b}$` is not affected — it keeps the
    parent's font-size so it flows with the heading text around it. */
 .claude-math[data-tex-kind="env"] {
-  font-size: 13px;
+  font-size: var(--incipit-body-size, 13px);
 }
 .katex-display {
   margin: 1.1em auto !important;
@@ -480,7 +480,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   font-family: 'Reading', 'IBM Plex Serif', Georgia,
                'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
                system-ui, serif !important;
-  font-size: 13px !important;
+  font-size: var(--incipit-body-size, 13px) !important;
   line-height: 1.55 !important;
 }
 
@@ -494,14 +494,14 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   font-family: 'Reading', 'IBM Plex Serif', Georgia,
                'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
                system-ui, serif !important;
-  font-size: 13px !important;
+  font-size: var(--incipit-body-size, 13px) !important;
   line-height: 1.55 !important;
 }
 [data-incipit-menu-item-description] {
   font-family: 'Reading', 'IBM Plex Serif', Georgia,
                'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
                system-ui, serif !important;
-  font-size: 12px !important;
+  font-size: calc(var(--incipit-body-size, 13px) - 1px) !important;
   line-height: 1.5 !important;
 }
 
@@ -523,7 +523,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   font-family: 'Emphasis', 'Reading', 'IBM Plex Serif', Georgia,
                'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
                system-ui, serif !important;
-  font-size: 13px !important;
+  font-size: var(--incipit-body-size, 13px) !important;
   font-weight: 400 !important;
   font-variation-settings: normal;
 }
@@ -537,6 +537,167 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 [data-incipit-command-ref] {
   font-family: 'Rec Mono Linear', Consolas, Monaco, 'Courier New', monospace !important;
   font-variation-settings: "MONO" 1, "CASL" 0, "slnt" 0;
+}
+
+/* ============================================================
+   Tool-use fold (data is sourced from React fiber; the `decorate`
+   function in claude_code_enhance.js sets these attributes).
+
+   Design contract:
+   - `[data-incipit-tool-use]` is the outer container for every tool-use.
+   - `[data-incipit-tool-collapsed="true"]` hides the diff body.
+   - `[data-incipit-tool-has-stats="1"]` means we injected +N/-M on the
+     summary row and hid the host `secondaryLine` ("Modified" / "Added N").
+     On non-Edit/Write tools the secondaryLine is kept as-is — the host's
+     fingerprint is more informative than we could guess.
+   ============================================================ */
+
+/* Summary row is the click target for fold toggle (except the filename
+   path, which stays selectable — see enhance.js). Grey by default, lights
+   up to body color on hover. `white-space: nowrap` keeps the injected
+   stats pinned to the row even when the tool-name text is very long. */
+[data-incipit-tool-use] [data-incipit-tool-summary] {
+  cursor: pointer;
+  color: #9c9c9a;
+  transition: color 0.12s ease;
+  white-space: nowrap;
+}
+[data-incipit-tool-use] [data-incipit-tool-summary]:hover,
+[data-incipit-tool-use] [data-incipit-tool-summary]:hover * {
+  color: inherit;
+}
+[data-incipit-tool-use] [data-incipit-tool-summary] [data-incipit-tool-name] {
+  color: inherit !important;
+}
+/* Restore a text cursor on the path span so it looks selectable, matching
+   the JS click-skip rule. */
+[data-incipit-tool-use] [data-incipit-tool-summary] [data-incipit-tool-name-secondary] {
+  cursor: text;
+}
+
+/* Host uses flex with a `flex: 1` plaintext span inside the title wrapper
+   for Bash / LSP / TodoWrite rows, which justifies any trailing sibling
+   (our stats) to the far-right of the summary. Force the title wrapper
+   back to inline flow whenever we've injected stats so the `+N -M` and
+   chevron land immediately after the title text, matching the Edit case
+   where the host uses an inline-only `toolNameTextSecondary` span. */
+[data-incipit-tool-summary]:has([data-incipit-tool-stats]) > span:first-child {
+  display: inline !important;
+}
+[data-incipit-tool-summary]:has([data-incipit-tool-stats]) [data-incipit-tool-name] {
+  flex: 0 0 auto !important;
+}
+
+[data-incipit-tool-use][data-incipit-tool-collapsed="true"] [data-incipit-tool-body] {
+  display: none !important;
+}
+
+/* Hide the host `secondaryLine` ("Modified" / "Added N lines") only when we
+   have our own precise stats. Non-Edit/Write tools keep the host fingerprint. */
+[data-incipit-tool-use][data-incipit-tool-has-stats="1"] [data-incipit-tool-secondary] {
+  display: none !important;
+}
+
+/* Stats block sits inline right after the tool name/path.  Body font, body
+   size — no mono override. Parent `toolSummary` applies a mono font via
+   `[data-incipit-tool-summary]`, we step out of it with `inherit !important`
+   to land on the body stack. `vertical-align: middle` lines the chevron's
+   geometric center up with the x-height of the surrounding text rather than
+   hanging the whole 16×16 block above the baseline (which reads as a
+   top-right offset, most visible on short Bash / LSP rows). */
+[data-incipit-tool-stats] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-left: 0.9em;
+  font-family: inherit !important;
+  font-variation-settings: initial !important;
+  font-size: inherit;
+  vertical-align: middle;
+}
+
+/* Plus / minus counters always show their semantic accent colors — they
+   are the tool-call's identifying signal and should not fade with the
+   idle-row grey. */
+[data-incipit-tool-added]   { color: #7cb27c !important; }
+[data-incipit-tool-removed] { color: #c96a6a !important; }
+
+/* Chevron — identical SVG / mask pattern / rotation to the thinking
+   toggle, so both fold affordances read as one visual language. Color
+   is `currentColor` so it follows the grey → hover-white fade above. */
+[data-incipit-tool-chevron] {
+  display: inline-block;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  background-color: currentColor;
+  opacity: 0.92;
+  transform-origin: 50% 50%;
+  transition: transform 0.15s ease;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7.12771 5.16489C7.28926 4.98544 7.55225 4.95072 7.75273 5.0682L7.83477 5.12778L12.835 9.62788C12.9402 9.72264 12.9999 9.85833 13 9.99995C13 10.1063 12.9667 10.2093 12.9053 10.2939L12.835 10.372L7.83477 14.8721C7.62952 15.0567 7.31242 15.0402 7.12771 14.835C6.94336 14.6298 6.95983 14.3126 7.16482 14.128L11.7519 9.99995L7.16482 5.87193L7.09744 5.79674C6.95939 5.60969 6.96617 5.34444 7.12771 5.16489Z' fill='black'/%3E%3C/svg%3E");
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: 16px 16px;
+  mask-image: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M7.12771 5.16489C7.28926 4.98544 7.55225 4.95072 7.75273 5.0682L7.83477 5.12778L12.835 9.62788C12.9402 9.72264 12.9999 9.85833 13 9.99995C13 10.1063 12.9667 10.2093 12.9053 10.2939L12.835 10.372L7.83477 14.8721C7.62952 15.0567 7.31242 15.0402 7.12771 14.835C6.94336 14.6298 6.95983 14.3126 7.16482 14.128L11.7519 9.99995L7.16482 5.87193L7.09744 5.79674C6.95939 5.60969 6.96617 5.34444 7.12771 5.16489Z' fill='black'/%3E%3C/svg%3E");
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: 16px 16px;
+}
+
+[data-incipit-tool-use]:not([data-incipit-tool-collapsed="true"]) [data-incipit-tool-chevron] {
+  transform: rotate(90deg);
+}
+
+/* Path truncation tooltip.
+
+   JS (`truncatePathSpan`) replaces the textContent of a deep
+   `toolNameTextSecondary` path with `…/parent/basename` and stores the
+   original on `data-incipit-tool-fullpath`. On hover we float a styled
+   tooltip above the span showing the full original via `attr()`.
+
+   Only paths with 3+ segments receive the attr, so the hover rule is
+   naturally scoped to cases where a tooltip adds information; short
+   paths that were never truncated stay plain.
+
+   `position: absolute` with `bottom: calc(100% + 4px)` sits the tooltip
+   just above the row; `pointer-events: none` keeps it out of the click
+   path; `direction: ltr + unicode-bidi: isolate` pin Windows backslash
+   paths against any inherited bidi context so `\` never flips; `z-index:
+   100` sits above message siblings but below overlays. */
+/* Path tooltip portal.  Rendered as a single `<div>` appended to
+   `<body>` by `setupToolFold` so no host overflow / stacking /
+   containment context can clip it. JS (`showTip` / `hideTip`) toggles
+   the `data-incipit-path-tooltip-visible` attribute and writes
+   `left` / `top` on mouseover; we only declare the visual surface here.
+   `font-family` is set explicitly rather than inherited because the
+   tooltip lives outside any incipit-styled container, and the host
+   body's default font family is usually a system sans-serif. */
+[data-incipit-path-tooltip] {
+  position: fixed;
+  padding: 0.35em 0.7em;
+  background: #2c2c2a;
+  color: #f8f8f6;
+  border: 1px solid rgba(248, 248, 246, 0.08);
+  border-radius: 3px;
+  font-family: 'Reading', Georgia, 'Noto Sans SC', sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  max-width: 90vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  direction: ltr;
+  unicode-bidi: isolate;
+  z-index: 9999;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+[data-incipit-path-tooltip][data-incipit-path-tooltip-visible="1"] {
+  visibility: visible;
+  opacity: 1;
 }
 
 /* Fenced code blocks. */
@@ -908,7 +1069,7 @@ pre code {
   padding: 2px 4px;
   cursor: pointer;
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--incipit-body-size, 13px);
   line-height: 1.4;
   color: rgba(255,255,255,0.50);
   transition: color 0.15s;
@@ -1013,7 +1174,7 @@ pre code {
   font-family: 'Reading', 'IBM Plex Serif', Georgia,
                'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
                system-ui, serif;
-  font-size: 13px;
+  font-size: var(--incipit-body-size, 13px);
   font-weight: 400;
   font-variant-numeric: tabular-nums; /* Keep digits monospaced to avoid width jitter. */
   color: #f8f8f6;                     /* Match the footer button text color. */
@@ -1083,7 +1244,7 @@ pre code {
   font-family: 'Reading', 'IBM Plex Serif', Georgia,
                'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
                system-ui, serif;
-  font-size: 13px;
+  font-size: var(--incipit-body-size, 13px);
   line-height: 1.5;
   color: #e8e6dd;
   font-variant-numeric: tabular-nums;

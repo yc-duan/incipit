@@ -23,16 +23,24 @@ const {
   SUPPORTED_LANGUAGES,
   readConfig,
   writeConfig,
+  getFeatures,
+  setFeature,
+  getTheme,
+  setBodyFontSize,
+  resetConfigurable,
+  BODY_FONT_SIZE_OPTIONS,
+  DEFAULT_THEME,
 } = require('./config');
 const { t, setLocale } = require('./i18n');
 const {
   Ansi,
   clearScreen,
   color,
-  promptPrefix,
+  renderConfigureMenu,
   renderLanguagePicker,
   renderMainMenu,
 } = require('./frontispiece');
+const { keyLoop } = require('./select');
 
 function prompt(question) {
   return new Promise(resolve => {
@@ -49,6 +57,12 @@ async function pause() {
 }
 
 const PACKAGE_ROOT = path.resolve(__dirname, '..');
+
+function loadPackageVersion() {
+  try { return require(path.join(PACKAGE_ROOT, 'package.json')).version || null; }
+  catch (_) { return null; }
+}
+const PACKAGE_VERSION = loadPackageVersion();
 
 async function handleApply({ silent = false, askBackupName = false } = {}) {
   if (!silent) clearScreen();
@@ -106,9 +120,28 @@ async function handleApply({ silent = false, askBackupName = false } = {}) {
   console.log();
   for (const line of result.statusLines) console.log(line);
   console.log();
+  printApplySummary(result.features, result.theme);
+  console.log();
   console.log(color(t('apply.done'),          Ansi.GREEN));
   console.log(color(t('apply.upgrade_hint'),  Ansi.YELLOW));
   return 0;
+}
+
+function printApplySummary(features, theme) {
+  const onMark  = color('✓ ' + t('apply.summary_on'),  Ansi.TERRA);
+  const offMark = color('✗ ' + t('apply.summary_off'), Ansi.GREY);
+  const head = color(t('apply.summary_heading'), Ansi.GREY);
+  const labelWidth = 22;
+  const indent = '  ';
+  console.log(head);
+  const row = (label, value) =>
+    console.log(indent + color(label.padEnd(labelWidth), Ansi.IVORY) + value);
+  row(t('configure.feature_math'),      features.math         ? onMark  : offMark);
+  row(t('configure.feature_session'),   features.sessionUsage ? onMark  : offMark);
+  row(t('configure.feature_tool_fold'), features.toolFold     ? onMark  : offMark);
+  row(t('configure.param_body_size'),   color(`${theme.bodyFontSize} px`, Ansi.IVORY));
+  console.log();
+  console.log(indent + color(t('apply.summary_hint'), Ansi.GREY));
 }
 
 function entryStatusMark(e) {
@@ -174,22 +207,233 @@ async function handleRestore({ silent = false } = {}) {
   return 0;
 }
 
-function renderMenu() {
-  let target = null;
-  try {
-    target = findLatestClaudeCodeExtension();
-  } catch (_) {}
+// Main menu rows — one for each action. `id` is returned from the
+// keyLoop when the row is activated.
+function mainMenuRows() {
+  return [
+    { id: 'apply',     mark: '1.', label: t('menu.apply') },
+    { id: 'restore',   mark: '2.', label: t('menu.restore') },
+    { id: 'configure', mark: '3.', label: t('menu.configure') },
+    { id: 'quit',      mark: 'q.', label: t('menu.quit') },
+  ];
+}
 
-  renderMainMenu({
-    target,
-    missingText: t('ledger.extension_missing'),
-    backupRoot: BACKUP_ROOT,
-    menuItems: [
-      { mark: '1.', label: t('menu.apply') },
-      { mark: '2.', label: t('menu.restore') },
-      { mark: 'q.', label: t('menu.quit') },
-    ],
+// Returns one of: 'apply' | 'restore' | 'configure' | 'quit'.
+async function selectMainMenu() {
+  let target = null;
+  try { target = findLatestClaudeCodeExtension(); } catch (_) {}
+
+  const rows = mainMenuRows();
+  let index = 0;
+
+  const render = () => {
+    renderMainMenu({
+      target,
+      missingText: t('ledger.extension_missing'),
+      backupRoot: BACKUP_ROOT,
+      version: PACKAGE_VERSION,
+      menuItems: rows.map((r, i) => ({
+        mark: r.mark,
+        label: r.label,
+        selected: i === index,
+      })),
+      hint: t('hint.main'),
+    });
+  };
+
+  return keyLoop({
+    render,
+    onKey: (str, key) => {
+      if (!key) return;
+      if (key.name === 'up' || key.name === 'k') {
+        index = (index - 1 + rows.length) % rows.length;
+        return;
+      }
+      if (key.name === 'down' || key.name === 'j') {
+        index = (index + 1) % rows.length;
+        return;
+      }
+      if (key.name === 'return' || key.name === 'enter') {
+        return { done: true, result: rows[index].id };
+      }
+      if (key.name === 'q' || str === 'q') {
+        return { done: true, result: 'quit' };
+      }
+      // Number shortcuts jump straight to the matching row.
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i].mark === `${str}.`) {
+          return { done: true, result: rows[i].id };
+        }
+      }
+    },
   });
+}
+
+// Configure screen rows — kinds: 'toggle' (space flips), 'knob' (enter
+// drills), 'action' (enter fires). The 5 rows are static; `index`
+// tracks the currently focused row.
+async function handleConfigure() {
+  let index = 0;
+  while (true) {
+    const features = getFeatures();
+    const theme = getTheme();
+
+    const render = () => renderConfigureMenu({
+      version: PACKAGE_VERSION,
+      heading: t('configure.heading'),
+      features,
+      theme,
+      selectedIndex: index,
+      hint: t('hint.configure'),
+      labels: {
+        math: t('configure.feature_math'),
+        sessionUsage: t('configure.feature_session'),
+        toolFold: t('configure.feature_tool_fold'),
+        bodyFontSize: t('configure.param_body_size'),
+        reset: t('configure.reset'),
+        back: t('configure.back'),
+      },
+    });
+
+    const ROW_COUNT = 6;  // math, session, toolFold, bodysize, reset, back
+
+    const outcome = await keyLoop({
+      render,
+      onKey: (str, key) => {
+        if (!key) return;
+        if (key.name === 'up' || key.name === 'k') {
+          index = (index - 1 + ROW_COUNT) % ROW_COUNT;
+          return;
+        }
+        if (key.name === 'down' || key.name === 'j') {
+          index = (index + 1) % ROW_COUNT;
+          return;
+        }
+        if (key.name === 'backspace' || key.name === 'escape' ||
+            key.name === 'b' || key.name === 'q' ||
+            str === 'b' || str === 'q') {
+          return { done: true, result: { action: 'back' } };
+        }
+        // Space: toggle the boolean on rows 0/1/2.
+        if (key.name === 'space' || str === ' ') {
+          if (index === 0 || index === 1 || index === 2) {
+            return { done: true, result: { action: 'toggle', index } };
+          }
+          return;
+        }
+        if (key.name === 'return' || key.name === 'enter') {
+          if (index === 0 || index === 1 || index === 2) {
+            return { done: true, result: { action: 'toggle', index } };
+          }
+          if (index === 3) return { done: true, result: { action: 'bodysize' } };
+          if (index === 4) return { done: true, result: { action: 'reset' } };
+          if (index === 5) return { done: true, result: { action: 'back' } };
+          return;
+        }
+        // Letter shortcuts (r for reset, number for direct row activation).
+        if (key.name === 'r' || str === 'r') {
+          return { done: true, result: { action: 'reset' } };
+        }
+        if (str === '1') { index = 0; return { done: true, result: { action: 'toggle', index: 0 } }; }
+        if (str === '2') { index = 1; return { done: true, result: { action: 'toggle', index: 1 } }; }
+        if (str === '3') { index = 2; return { done: true, result: { action: 'toggle', index: 2 } }; }
+        if (str === '4') { index = 3; return { done: true, result: { action: 'bodysize' } }; }
+      },
+    });
+
+    if (outcome.action === 'back') return;
+    if (outcome.action === 'toggle') {
+      if (outcome.index === 0) setFeature('math', !features.math);
+      else if (outcome.index === 1) setFeature('sessionUsage', !features.sessionUsage);
+      else if (outcome.index === 2) setFeature('toolFold', !features.toolFold);
+      continue;
+    }
+    if (outcome.action === 'bodysize') {
+      await chooseBodyFontSize();
+      continue;
+    }
+    if (outcome.action === 'reset') {
+      const confirmed = await confirmReset();
+      if (confirmed) {
+        resetConfigurable();
+        index = 0;
+      }
+      continue;
+    }
+  }
+}
+
+// Reset confirmation exits raw mode and uses a simple readline [y/N]
+// prompt — same pattern as the startup update prompt.
+async function confirmReset() {
+  clearScreen();
+  console.log();
+  console.log('  ' + color(t('configure.reset_confirm'), Ansi.YELLOW));
+  let raw;
+  try { raw = await prompt('  '); } catch (_) { return false; }
+  const yes = /^y(es)?$/i.test(raw.trim());
+  if (yes) {
+    console.log();
+    console.log('  ' + color(t('configure.reset_done'), Ansi.GREEN));
+    await pause();
+  }
+  return yes;
+}
+
+async function chooseBodyFontSize() {
+  const defaultMark = t('configure.body_size_default_mark');
+  const current = getTheme().bodyFontSize;
+  let index = Math.max(0, BODY_FONT_SIZE_OPTIONS.indexOf(current));
+
+  const render = () => {
+    const options = BODY_FONT_SIZE_OPTIONS.map((size, idx) => ({
+      mark: `${idx + 1}.`,
+      label: `${size} px` +
+        (size === DEFAULT_THEME.bodyFontSize ? `  ${defaultMark}` : ''),
+      selected: idx === index,
+    }));
+    options.push({ mark: 'b.', label: t('configure.back'), selected: index === BODY_FONT_SIZE_OPTIONS.length });
+    renderLanguagePicker({
+      version: PACKAGE_VERSION,
+      heading: t('configure.body_size_heading'),
+      optionsList: options,
+      hint: t('hint.picker'),
+    });
+  };
+
+  const total = BODY_FONT_SIZE_OPTIONS.length + 1;  // options + back row
+  const outcome = await keyLoop({
+    render,
+    onKey: (str, key) => {
+      if (!key) return;
+      if (key.name === 'up' || key.name === 'k') {
+        index = (index - 1 + total) % total;
+        return;
+      }
+      if (key.name === 'down' || key.name === 'j') {
+        index = (index + 1) % total;
+        return;
+      }
+      if (key.name === 'backspace' || key.name === 'escape' ||
+          key.name === 'b' || key.name === 'q' ||
+          str === 'b' || str === 'q') {
+        return { done: true, result: { back: true } };
+      }
+      if (key.name === 'return' || key.name === 'enter') {
+        if (index < BODY_FONT_SIZE_OPTIONS.length) {
+          return { done: true, result: { pick: BODY_FONT_SIZE_OPTIONS[index] } };
+        }
+        return { done: true, result: { back: true } };
+      }
+      // Number shortcut: 1/2/3 immediately pick that size.
+      const n = parseInt(str, 10);
+      if (Number.isFinite(n) && n >= 1 && n <= BODY_FONT_SIZE_OPTIONS.length) {
+        return { done: true, result: { pick: BODY_FONT_SIZE_OPTIONS[n - 1] } };
+      }
+    },
+  });
+
+  if (outcome.pick != null) setBodyFontSize(outcome.pick);
 }
 
 function printHelp() {
@@ -210,24 +454,42 @@ function printHelp() {
 }
 
 async function showLanguagePicker() {
-  while (true) {
+  const rows = [
+    { id: 'zh', mark: '1.', label: '中文' },
+    { id: 'en', mark: '2.', label: 'English' },
+  ];
+  let index = 0;
+
+  const render = () => {
     renderLanguagePicker({
       heading: 'Please choose your language  /  请选择语言',
-      optionsList: [
-        { mark: '1.', label: '中文' },
-        { mark: '2.', label: 'English' },
-      ],
+      version: PACKAGE_VERSION,
+      optionsList: rows.map((r, i) => ({
+        mark: r.mark, label: r.label, selected: i === index,
+      })),
+      hint: t('hint.picker'),
     });
-    let raw;
-    try { raw = (await prompt(promptPrefix())); } catch (_) { return 'en'; }
-    const choice = raw.trim().toLowerCase();
-    if (choice === '1' || choice === 'i' || choice === 'zh' || choice === '中文') {
-      return 'zh';
-    }
-    if (choice === '2' || choice === 'ii' || choice === 'en' || choice === 'english') {
-      return 'en';
-    }
-  }
+  };
+
+  return keyLoop({
+    render,
+    onKey: (str, key) => {
+      if (!key) return;
+      if (key.name === 'up' || key.name === 'k') {
+        index = (index - 1 + rows.length) % rows.length;
+        return;
+      }
+      if (key.name === 'down' || key.name === 'j') {
+        index = (index + 1) % rows.length;
+        return;
+      }
+      if (key.name === 'return' || key.name === 'enter') {
+        return { done: true, result: rows[index].id };
+      }
+      if (str === '1') return { done: true, result: 'zh' };
+      if (str === '2') return { done: true, result: 'en' };
+    },
+  });
 }
 
 async function resolveLocale({ interactive, forcedLang }) {
@@ -497,6 +759,15 @@ async function main(argv) {
     return code;
   }
 
+  // Interactive path requires a TTY. Piping into `incipit` without
+  // subcommand is a scripting mistake — tell the user which command to
+  // reach for instead of silently falling back to a degraded input.
+  if (!process.stdin.isTTY) {
+    console.error(color(t('menu.tty_required'), Ansi.RED));
+    console.error(color(t('menu.tty_hint'), Ansi.GREY));
+    return 1;
+  }
+
   const updateInfo = await updatePromise;
   if (updateInfo && updateInfo.outdated) {
     const outcome = await handleUpdatePrompt(updateInfo);
@@ -504,32 +775,35 @@ async function main(argv) {
   }
 
   while (true) {
-    renderMenu();
-    let choice;
+    let action;
     try {
-      choice = (await prompt(promptPrefix())).trim().toLowerCase();
-    } catch (_) {
-      console.log();
-      return 0;
+      action = await selectMainMenu();
+    } catch (exc) {
+      console.log(color(t('menu.operation_failed', { msg: exc.message }), Ansi.RED));
+      if (exc.stack) console.log(exc.stack);
+      return 1;
     }
-    if (choice === 'q' || choice === 'quit' || choice === 'exit') return 0;
-    if (choice === '1' || choice === 'i') {
+    if (action === 'quit' || (action && action.action === 'back')) return 0;
+    if (action === 'apply') {
       try { await handleApply({ askBackupName: true }); }
       catch (exc) {
         console.log(color(t('menu.operation_failed', { msg: exc.message }), Ansi.RED));
         if (exc.stack) console.log(exc.stack);
       }
       await pause();
-    } else if (choice === '2' || choice === 'ii') {
+    } else if (action === 'restore') {
       try { await handleRestore(); }
       catch (exc) {
         console.log(color(t('menu.operation_failed', { msg: exc.message }), Ansi.RED));
         if (exc.stack) console.log(exc.stack);
       }
       await pause();
-    } else {
-      console.log(color(t('menu.invalid'), Ansi.RED));
-      await pause();
+    } else if (action === 'configure') {
+      try { await handleConfigure(); }
+      catch (exc) {
+        console.log(color(t('menu.operation_failed', { msg: exc.message }), Ansi.RED));
+        if (exc.stack) console.log(exc.stack);
+      }
     }
   }
 }

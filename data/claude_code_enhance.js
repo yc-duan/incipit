@@ -21,7 +21,25 @@ import { renderMathInSegment as rewriteMathInSegment } from './math_rewriter.js'
 (() => {
   'use strict';
 
-  window.__CLAUDE_ENHANCE_PREPROCESS_MARKDOWN__ = preprocessMarkdownMath;
+  // User feature toggles come from `globalThis.__incipitConfig`, which is
+  // written as a preamble by `install.js` at apply time. Missing / malformed
+  // values fall back to "all on" so a bare enhance.js without the preamble
+  // still behaves like the pre-config release.
+  const CFG = (() => {
+    const raw = (typeof globalThis !== 'undefined' && globalThis.__incipitConfig) || {};
+    const f = (raw && typeof raw.features === 'object') ? raw.features : {};
+    return Object.freeze({
+      math: f.math !== false,
+      sessionUsage: f.sessionUsage !== false,
+      toolFold: f.toolFold !== false,
+    });
+  })();
+
+  // When math is disabled the placeholder preamble becomes a passthrough
+  // so the markdown text never acquires CCREMATH tokens downstream.
+  window.__CLAUDE_ENHANCE_PREPROCESS_MARKDOWN__ = CFG.math
+    ? preprocessMarkdownMath
+    : (raw => raw);
 
   // ========== 0. dom api freeze ==========
   //
@@ -264,6 +282,9 @@ import { renderMathInSegment as rewriteMathInSegment } from './math_rewriter.js'
   }
 
   function renderMathInSegment(segment) {
+    if (!CFG.math) {
+      return { complete: true, mutated: false };
+    }
     if (!isKatexReady()) {
       return { complete: false, mutated: false };
     }
@@ -1188,6 +1209,7 @@ import { renderMathInSegment as rewriteMathInSegment } from './math_rewriter.js'
   // Data arrives from the extension host through `webview.postMessage`.
   // The badge is inserted into the input footer before the bypass control.
   function setupCacheBadge() {
+    if (!CFG.sessionUsage) return;
     var BADGE_CLASS = 'cceBadge';
     var TEXT_CLASS = 'cceBadgeText';
     var POPUP_CLASS = 'cceStatPopup';
@@ -1485,6 +1507,410 @@ import { renderMathInSegment as rewriteMathInSegment } from './math_rewriter.js'
     ensureBadge();
   }
 
+  // ============================================================
+  // Tool-use fold.
+  // ============================================================
+  //
+  // Each `[class*="toolUse_"]` element holds one tool-call block. Claude
+  // Code renders these fully expanded by default — for a long conversation
+  // with many Edits, the diff editors eat the whole transcript viewport.
+  //
+  // We pierce React fiber to read the underlying `tool_use` block:
+  //   { type: 'tool_use', name: 'Edit', input: { old_string, new_string, ... } }
+  // and compute precise `+added / -removed` line counts via line-level LCS.
+  // Then we:
+  //   1. inject a `<span data-incipit-tool-stats>+N −M ▸</span>` at the end
+  //      of the tool summary row (stats only for Edit/MultiEdit/Write),
+  //   2. default-collapse the body via `data-incipit-tool-collapsed="true"`,
+  //   3. hide the host `secondaryLine` ("Modified" / "Added 1 line") only
+  //      when we provided our own stats — non-Edit/Write tools keep their
+  //      host-provided fingerprint because we have nothing better to say.
+  //
+  // The fiber walk is bounded (10 levels up) and the LCS DP is capped at
+  // 500k cell-products (roughly 700×700 lines) before falling back to a
+  // length-delta approximation, so pathological Edit sizes cannot stall
+  // the render.
+  //
+  // FRAGILITY NOTE — this is the only place in the project that reads
+  // React's internal bookkeeping (`__reactFiber*` / `memoizedProps`). Every
+  // other module (host_probe, math gate, thinking, badge, input avoidance)
+  // stays on CSS module prefixes + DOM structure, which survives Claude
+  // Code's minor version bumps. Fiber pierce does not have that guarantee:
+  // a React major upgrade could rename the DOM key (historical precedent:
+  // 16→17 `__reactInternalInstance` → `__reactFiber$`), and a bundler /
+  // component refactor inside Claude Code could reshape `memoizedProps`
+  // into something `readToolUseBlock` no longer recognises. We mitigate
+  // with a dual-shape unwrap (accepts both `p.content.type` and
+  // `p.content.content.type`) and a null-early-return, so the failure mode
+  // is "tool-fold silently disabled, host renders natively" rather than a
+  // half-broken UI — but if this function ever stops decorating anything,
+  // the first suspect is a fiber shape drift, not a CSS selector miss.
+  function setupToolFold() {
+    if (!CFG.toolFold) return;
+
+    // Claude Code wraps every content block in a `{ content: <innerBlock> }`
+    // envelope before handing it to the renderer, so the prop we want is
+    // `memoizedProps.content.content` (double indirection), not just
+    // `memoizedProps.content`. Accept both shapes in case the wrapper gets
+    // dropped in a future refactor.
+    function readToolUseBlock(el) {
+      const fk = Object.keys(el).find(k => k.startsWith('__reactFiber'));
+      if (!fk) return null;
+      let f = el[fk];
+      for (let i = 0; i < 10 && f; i++) {
+        const p = f.memoizedProps;
+        if (p && p.content) {
+          const outer = p.content;
+          if (outer.type === 'tool_use') {
+            return { block: outer, status: p.status };
+          }
+          if (outer.content && outer.content.type === 'tool_use') {
+            return { block: outer.content, status: p.status };
+          }
+        }
+        f = f.return;
+      }
+      return null;
+    }
+
+    function lineDiffStats(oldText, newText) {
+      const a = String(oldText == null ? '' : oldText).split('\n');
+      const b = String(newText == null ? '' : newText).split('\n');
+      const m = a.length, n = b.length;
+      if (m === 0 && n === 0) return { added: 0, removed: 0 };
+      if (m * n > 500000) {
+        return {
+          added: Math.max(0, n - m),
+          removed: Math.max(0, m - n),
+        };
+      }
+      const prev = new Array(n + 1).fill(0);
+      const curr = new Array(n + 1).fill(0);
+      for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+          if (a[i - 1] === b[j - 1]) curr[j] = prev[j - 1] + 1;
+          else curr[j] = curr[j - 1] > prev[j] ? curr[j - 1] : prev[j];
+        }
+        for (let j = 0; j <= n; j++) prev[j] = curr[j];
+      }
+      const lcs = prev[n];
+      return { added: n - lcs, removed: m - lcs };
+    }
+
+    function computeStats(block) {
+      if (!block || !block.input) return null;
+      const name = block.name;
+      const input = block.input;
+      if (name === 'Edit' || name === 'MultiEdit') {
+        if (typeof input.old_string === 'string' && typeof input.new_string === 'string') {
+          return lineDiffStats(input.old_string, input.new_string);
+        }
+      } else if (name === 'Write') {
+        if (typeof input.content === 'string') {
+          const lines = input.content === '' ? 0 : input.content.split('\n').length;
+          return { added: lines, removed: 0 };
+        }
+      }
+      return null;
+    }
+
+    // Path truncation — deep absolute paths in the tool summary's secondary
+    // slot (`toolNameTextSecondary`, e.g. `C:\Users\...\tests\foo.py`) are
+    // replaced with `…/parent/basename` so a long row stops overflowing the
+    // chat viewport. Original is stashed on `data-incipit-tool-fullpath`
+    // for the CSS hover tooltip to read via `attr()`.
+    //
+    // Idempotent across MO ticks: when our own `…`-prefixed form is still
+    // in place we re-derive from the stored original; if the host swaps in
+    // a new path, the `current != stored && !startsWith('…')` branch
+    // rehydrates the source of truth.
+    //
+    // Intentionally skipped (each degrades to "leave text as-is"):
+    //   - spans with element children (not a plain-text leaf)
+    //   - content with no `/` or `\`, or any whitespace — catches Bash
+    //     command text in the `Plaintext` variant of the same class family
+    //   - paths with fewer than 3 segments (truncating `src/foo.py` would
+    //     be longer than the original, and carries no useful context)
+    function truncatePathSpan(pathSpan) {
+      // If an ancestor already carries our fullpath attr, an outer
+      // selector match already processed this path — skip to avoid
+      // double-truncation (filePath nested inside toolNameTextSecondary).
+      if (pathSpan.parentElement &&
+          pathSpan.parentElement.closest('[data-incipit-tool-fullpath]')) {
+        return;
+      }
+      // Host sometimes wraps the path text in `<a>` (for click-to-open) or
+      // a nested `<span class="filePath_...">` layer. Walk down while
+      // there's exactly one element child so we edit the true text leaf,
+      // preserving any href / event handlers on the wrapper. If the DOM
+      // branches, bail — mixing textContent into a multi-child host
+      // structure would destroy adjacent siblings.
+      let leaf = pathSpan;
+      while (leaf.children.length === 1) {
+        leaf = leaf.firstElementChild;
+      }
+      if (leaf.children.length > 0) return;
+
+      const current = (leaf.textContent || '').trim();
+      if (!current) return;
+
+      // Store the fullpath attr on the outer `pathSpan`, not the leaf —
+      // outer is usually a plain `<span>` (stable hover target, clean CSS
+      // inheritance), while the leaf may be an `<a>` with existing
+      // link-affordance rules that can conflict with `::after` rendering.
+      const stored = pathSpan.dataset.incipitToolFullpath;
+      const hostFresh = (stored && current.charCodeAt(0) === 0x2026) ? stored : current;
+
+      let desired = hostFresh;
+      let shouldStore = false;
+      const looksLikePath =
+        !/\s/.test(hostFresh) && (hostFresh.includes('/') || hostFresh.includes('\\'));
+      if (looksLikePath) {
+        const parts = hostFresh.split(/[\/\\]+/).filter(Boolean);
+        if (parts.length >= 3) {
+          const sep = hostFresh.includes('\\') ? '\\' : '/';
+          desired = '\u2026' + sep + parts[parts.length - 2] + sep + parts[parts.length - 1];
+          shouldStore = true;
+        }
+      }
+
+      if (shouldStore) {
+        if (pathSpan.dataset.incipitToolFullpath !== hostFresh) {
+          pathSpan.dataset.incipitToolFullpath = hostFresh;
+        }
+      } else if (pathSpan.dataset.incipitToolFullpath) {
+        delete pathSpan.dataset.incipitToolFullpath;
+      }
+
+      if (leaf.textContent !== desired) {
+        leaf.textContent = desired;
+      }
+    }
+
+    // Path tooltip portal.  A single `<div>` appended to `<body>`,
+    // `position: fixed`, shown on mouseover of any
+    // `[data-incipit-tool-fullpath]` anywhere in the subtree.
+    //
+    // Rationale: an in-line `::after` tooltip on the path span is subject
+    // to any ancestor's `overflow: hidden` / `contain:` / stacking
+    // context, any of which can silently clip or suppress it. The host
+    // freely sets those on summary / toolUse / message wrappers. A
+    // body-level fixed element sidesteps all of it — one clipping
+    // boundary (the viewport) and one stacking context (the top of the
+    // tree), both of which we control.
+    //
+    // Decoupling: zero reads or writes of host DOM beyond the
+    // `data-incipit-tool-fullpath` attribute that truncatePathSpan has
+    // already placed. Hover detection is delegated on `document.body`
+    // scoped via `closest`; `scroll` / `resize` force-hide so a
+    // re-layout never leaves the tooltip drifting over the wrong
+    // anchor. An rAF loop runs only while visible, reposition + check
+    // `body.contains(target)` so React re-renders auto-dismiss.
+    let tipEl = null;
+    let tipTarget = null;
+    let tipRaf = 0;
+
+    function ensureTipEl() {
+      if (tipEl && document.body && document.body.contains(tipEl)) return tipEl;
+      tipEl = document.createElement('div');
+      tipEl.setAttribute('data-incipit-path-tooltip', '');
+      if (document.body) document.body.appendChild(tipEl);
+      return tipEl;
+    }
+
+    function positionTip() {
+      if (!tipEl || !tipTarget) return;
+      const rect = tipTarget.getBoundingClientRect();
+      const h = tipEl.offsetHeight;
+      const above = rect.top >= h + 8;
+      const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+      const w = tipEl.offsetWidth;
+      const left = Math.max(4, Math.min(rect.left, vw - w - 4));
+      tipEl.style.left = left + 'px';
+      tipEl.style.top = (above ? rect.top - h - 4 : rect.bottom + 4) + 'px';
+    }
+
+    function tickTip() {
+      if (!tipTarget) { tipRaf = 0; return; }
+      if (!document.body || !document.body.contains(tipTarget)) { hideTip(); return; }
+      positionTip();
+      tipRaf = requestAnimationFrame(tickTip);
+    }
+
+    function showTip(target) {
+      const fullpath = target.dataset && target.dataset.incipitToolFullpath;
+      if (!fullpath) return;
+      const el = ensureTipEl();
+      tipTarget = target;
+      el.textContent = fullpath;
+      el.setAttribute('data-incipit-path-tooltip-visible', '1');
+      if (tipRaf) cancelAnimationFrame(tipRaf);
+      tipRaf = requestAnimationFrame(tickTip);
+    }
+
+    function hideTip() {
+      if (!tipEl) return;
+      tipEl.removeAttribute('data-incipit-path-tooltip-visible');
+      tipTarget = null;
+      if (tipRaf) { cancelAnimationFrame(tipRaf); tipRaf = 0; }
+    }
+
+    document.body.addEventListener('mouseover', evt => {
+      const t = evt.target && evt.target.closest
+        ? evt.target.closest('[data-incipit-tool-fullpath]') : null;
+      if (t) showTip(t);
+    }, true);
+    document.body.addEventListener('mouseout', evt => {
+      if (!tipTarget) return;
+      const t = evt.target && evt.target.closest
+        ? evt.target.closest('[data-incipit-tool-fullpath]') : null;
+      if (!t || t !== tipTarget) return;
+      if (t.contains(evt.relatedTarget)) return;
+      hideTip();
+    }, true);
+    window.addEventListener('scroll', hideTip, { capture: true, passive: true });
+    window.addEventListener('resize', hideTip);
+
+    // Idempotent: safe to call repeatedly on the same element. React may
+    // re-render the summary subtree (blowing away our stats span) or
+    // update the tool-use props mid-stream (so the stats numbers need
+    // refreshing), and each MO tick retries every toolUse node.
+    //
+    // Tools without a `toolBody_` child (e.g. Read, Grep when they have no
+    // expandable output) are left untouched — there is nothing to fold,
+    // so showing a chevron would be a lie.
+    //
+    // Click-to-toggle is wired on the toolUse root via event delegation
+    // with two skip rules:
+    //   - click inside the diff body: user is interacting with the diff,
+    //     do not collapse under them.
+    //   - click on the filename path (`toolNameTextSecondary`): preserve
+    //     text-selection for the filename, per user request.
+    // Everything else in the row (tool label, whitespace, +N / -M,
+    // chevron) toggles the fold.
+    function decorateToolUse(el) {
+      // Path truncation runs regardless of fiber/status — it is a pure
+      // display concern and should apply to failed / pending calls too.
+      const summary = el.querySelector('[class*="toolSummary"]');
+      if (summary) {
+        summary
+          .querySelectorAll('[class*="toolNameTextSecondary"], [class*="filePath"]')
+          .forEach(truncatePathSpan);
+      }
+
+      // Skip tools with no expandable body. Claude Code emits `toolBody_`
+      // for Edit / Write / Bash / TodoWrite etc. but leaves it empty for
+      // Read / Grep / Glob when the host has nothing to show below the
+      // summary. Adding a chevron to those would lie about expandability.
+      const body = el.querySelector('[class*="toolBody_"]');
+      if (!body || body.children.length === 0) return;
+
+      const data = readToolUseBlock(el);
+      if (!data) return;
+      // Blacklist only the terminal failure states. An allowlist on 'success'
+      // would silently break if Claude Code introduces a new status name
+      // (e.g. 'succeeded', 'ok', 'completed') in a minor version — stats and
+      // the chevron would disappear across the board for no visible reason.
+      if (data.status === 'error' || data.status === 'pending') return;
+
+      if (!summary) return;
+
+      // Append stats inside the title wrapper (summary's first <span>), not
+      // as a sibling of it. The host summary is a flex container with the
+      // title wrapper set to `flex: 1`, so a sibling span would get pushed
+      // to the far-right end of the row. Going inside the title wrapper
+      // lands our stats in the inline text flow, right after the path.
+      const titleWrap = summary.firstElementChild;
+      if (!titleWrap) return;
+
+      const stats = computeStats(data.block);
+
+      if (el.dataset.incipitToolBound !== '1') {
+        el.addEventListener('click', evt => {
+          const tgt = evt.target;
+          if (tgt.closest && tgt.closest('[class*="toolBody_"]')) return;
+          if (tgt.closest && tgt.closest('[class*="toolNameTextSecondary"]')) return;
+          evt.stopPropagation();
+          const collapsed = el.dataset.incipitToolCollapsed === 'true';
+          el.dataset.incipitToolCollapsed = collapsed ? 'false' : 'true';
+        });
+        el.dataset.incipitToolBound = '1';
+        if (!el.dataset.incipitToolCollapsed) {
+          el.dataset.incipitToolCollapsed = 'true';
+        }
+      }
+
+      // Granular create-once / textContent-only-on-change DOM updates.
+      // `innerHTML =` would wipe attributes that other passes (math_rewriter
+      // tagging, host_probe dataset writes) have layered onto our spans,
+      // and since those passes immediately re-add them the resulting
+      // attribute churn would flip `innerHTML !== html` back to true
+      // every frame and spin up a 60-fps rebuild loop.
+      let statsEl = summary.querySelector('[data-incipit-tool-stats]');
+      let addedSpan, removedSpan, chevronSpan;
+      if (!statsEl) {
+        statsEl = document.createElement('span');
+        statsEl.setAttribute('data-incipit-tool-stats', '');
+        addedSpan = document.createElement('span');
+        addedSpan.setAttribute('data-incipit-tool-added', '');
+        removedSpan = document.createElement('span');
+        removedSpan.setAttribute('data-incipit-tool-removed', '');
+        chevronSpan = document.createElement('span');
+        chevronSpan.setAttribute('data-incipit-tool-chevron', '');
+        statsEl.appendChild(addedSpan);
+        statsEl.appendChild(removedSpan);
+        statsEl.appendChild(chevronSpan);
+        titleWrap.appendChild(statsEl);
+      } else {
+        addedSpan = statsEl.querySelector('[data-incipit-tool-added]');
+        removedSpan = statsEl.querySelector('[data-incipit-tool-removed]');
+        chevronSpan = statsEl.querySelector('[data-incipit-tool-chevron]');
+      }
+
+      if (stats) {
+        const wantAdded = '+' + stats.added;
+        const wantRemoved = '\u2212' + stats.removed;
+        if (addedSpan.textContent !== wantAdded) addedSpan.textContent = wantAdded;
+        if (removedSpan.textContent !== wantRemoved) removedSpan.textContent = wantRemoved;
+        if (addedSpan.style.display === 'none') addedSpan.style.display = '';
+        if (removedSpan.style.display === 'none') removedSpan.style.display = '';
+        el.dataset.incipitToolHasStats = '1';
+      } else {
+        // Non-Edit/Write tools: hide the +/- spans but keep them in place
+        // and keep the chevron visible.
+        if (addedSpan.style.display !== 'none') addedSpan.style.display = 'none';
+        if (removedSpan.style.display !== 'none') removedSpan.style.display = 'none';
+        delete el.dataset.incipitToolHasStats;
+      }
+    }
+
+    let rescanScheduled = false;
+    function scheduleRescan() {
+      if (rescanScheduled) return;
+      rescanScheduled = true;
+      requestAnimationFrame(() => {
+        rescanScheduled = false;
+        if (!document.body) return;
+        // Use the raw class selector so we do not race host_probe's own
+        // tagging pass — decoration works regardless of whether the
+        // `data-incipit-tool-use` attr has landed yet.
+        document.body.querySelectorAll('[class*="toolUse_"]').forEach(decorateToolUse);
+      });
+    }
+
+    const mo = new MutationObserver(muts => {
+      for (let i = 0; i < muts.length; i++) {
+        if (muts[i].type === 'childList' && muts[i].addedNodes.length > 0) {
+          scheduleRescan();
+          return;
+        }
+      }
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+
+    scheduleRescan();
+  }
+
   function init() {
     log('Initializing v15 (theme.css + IBM Plex Serif + Noto Sans SC + Rec Mono Linear)...');
     applyAppVarOverrides();   // Run before `injectStyles` so CSS sees the variables.
@@ -1494,6 +1920,7 @@ import { renderMathInSegment as rewriteMathInSegment } from './math_rewriter.js'
     setupObserver();
     setupThinking();
     setupCacheBadge();
+    setupToolFold();
 
     // Drain the math queue after KaTeX loads. `setupObserver` already filled
     // `pendingSegments` via its own initial scan and flush() bailed because

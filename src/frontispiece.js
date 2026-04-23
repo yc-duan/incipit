@@ -22,14 +22,25 @@ const LAYOUT = Object.freeze({
   FRAME_MARGIN: 4,
   INDENT: 6,
   LABEL_COL: 12,
-  TOP_BLANKS: 3,
-  TITLE_GAP_AFTER: 4,
-  LEDGER_GAP_AFTER: 4,
   MENU_GAP_BEFORE_RULE: 2,
-  RULE_GAP_BEFORE_PROMPT: 1,
+  RULE_GAP_BEFORE_PROMPT: 0,
   PROMPT_MARK: '› ',
   MENU_MARK_COL: 5,
 });
+
+// Vertical breathing space is dynamic. On a roomy terminal we keep the
+// book-page rhythm; on a default 24–26 row terminal the top rule would
+// otherwise scroll off above the title, so the gaps compress to fit.
+function verticalGaps() {
+  const rows = process.stdout.rows || 30;
+  const tight = rows < 30;
+  return {
+    topBlanks:           tight ? 1 : 2,
+    titleGapAfter:       tight ? 2 : 3,
+    ledgerGapAfter:      tight ? 2 : 3,
+    menuGapBeforeRule:   tight ? 1 : 2,
+  };
+}
 
 const TITLE = 'I  ·  N  ·  C  ·  I  ·  P  ·  I  ·  T';
 const TAGLINES = Object.freeze([
@@ -42,7 +53,13 @@ function color(text, code) {
 }
 
 function clearScreen() {
-  process.stdout.write(process.platform === 'win32' ? '\x1Bc' : '\x1B[2J\x1B[H');
+  // `\x1B[2J` erases the viewport, `\x1B[3J` erases the scrollback
+  // (xterm extension, supported by Windows Terminal / VS Code / iTerm2 /
+  // modern Konsole / GNOME Terminal), `\x1B[H` homes the cursor. We
+  // deliberately avoid `\x1Bc` (RIS / Reset to Initial State) because
+  // RIS also resets cursor visibility, which wipes any `\x1B[?25l` the
+  // caller just wrote for raw-mode input loops.
+  process.stdout.write('\x1B[2J\x1B[3J\x1B[H');
 }
 
 function termWidth() {
@@ -121,12 +138,16 @@ function createPrinter(framePad) {
   };
 }
 
-function renderTitle(printer, inner) {
+function renderTitle(printer, inner, version) {
   const centered = text => centerLine(text, inner);
   printer.line(centered(color(TITLE, `${Ansi.TERRA}${Ansi.BOLD}`)));
   printer.blank();
   for (const tagline of TAGLINES) {
     printer.line(centered(color(tagline, `${Ansi.GREY}${Ansi.ITALIC}`)));
+  }
+  if (version) {
+    printer.blank();
+    printer.line(centered(color(`version ${version}`, `${Ansi.GREY}${Ansi.ITALIC}`)));
   }
 }
 
@@ -158,11 +179,26 @@ function renderLedger(printer, indent, inner, target, missingText, backupRoot) {
   emitRow('Backup', shortenPath(backupRoot));
 }
 
+// Cursor indent replaces the first half of `indent` with a terra `›`
+// while preserving the six-column visible width, so selected and
+// unselected rows stay left-aligned with the ledger above.
+function cursorIndent() {
+  return '   ' + color('›', Ansi.TERRA) + '  ';
+}
+
 function renderMenuItems(printer, indent, items) {
+  const cursor = cursorIndent();
   for (const item of items) {
     const mark = color(item.mark.padEnd(LAYOUT.MENU_MARK_COL), Ansi.TERRA);
-    printer.line(indent + mark + color(item.label, Ansi.IVORY));
+    const lead = item.selected ? cursor : indent;
+    printer.line(lead + mark + color(item.label, Ansi.IVORY));
   }
+}
+
+function renderHint(printer, indent, hint) {
+  if (!hint) return;
+  printer.blank();
+  printer.line(indent + color(hint, `${Ansi.GREY}${Ansi.ITALIC}`));
 }
 
 function promptPrefix() {
@@ -171,44 +207,114 @@ function promptPrefix() {
 }
 
 function renderMainMenu(options) {
-  const { menuItems, target, missingText, backupRoot } = options;
+  const { menuItems, target, missingText, backupRoot, version, hint } = options;
   clearScreen();
   const { inner, framePad, indent } = frameGeometry();
+  const gaps = verticalGaps();
   const printer = createPrinter(framePad);
   const rule = color('━'.repeat(inner), Ansi.GREY);
 
-  printer.blank();
   printer.line(rule);
-  for (let i = 0; i < LAYOUT.TOP_BLANKS; i++) printer.blank();
-  renderTitle(printer, inner);
-  for (let i = 0; i < LAYOUT.TITLE_GAP_AFTER; i++) printer.blank();
+  for (let i = 0; i < gaps.topBlanks; i++) printer.blank();
+  renderTitle(printer, inner, version);
+  for (let i = 0; i < gaps.titleGapAfter; i++) printer.blank();
   renderLedger(printer, indent, inner, target, missingText, backupRoot);
-  for (let i = 0; i < LAYOUT.LEDGER_GAP_AFTER; i++) printer.blank();
+  for (let i = 0; i < gaps.ledgerGapAfter; i++) printer.blank();
   renderMenuItems(printer, indent, menuItems);
-  for (let i = 0; i < LAYOUT.MENU_GAP_BEFORE_RULE; i++) printer.blank();
+  for (let i = 0; i < gaps.menuGapBeforeRule; i++) printer.blank();
   printer.line(rule);
+  renderHint(printer, indent, hint);
+  for (let i = 0; i < LAYOUT.RULE_GAP_BEFORE_PROMPT; i++) printer.blank();
+}
+
+function renderConfigureMenu(options) {
+  const { version, heading, features, theme, labels, selectedIndex, hint } = options;
+  clearScreen();
+  const { inner, framePad, indent } = frameGeometry();
+  const gaps = verticalGaps();
+  const printer = createPrinter(framePad);
+  const rule = color('━'.repeat(inner), Ansi.GREY);
+  const centered = text => centerLine(text, inner);
+  const cursor = cursorIndent();
+
+  printer.line(rule);
+  for (let i = 0; i < gaps.topBlanks; i++) printer.blank();
+  renderTitle(printer, inner, version);
+  for (let i = 0; i < gaps.titleGapAfter; i++) printer.blank();
+  printer.line(centered(color(heading, Ansi.GREY)));
+  printer.blank();
+  printer.blank();
+
+  const markCol = LAYOUT.MENU_MARK_COL;
+  const checkCol = 4;
+  const labelColWidth = 22;
+
+  // Every emit* call takes a `rowIndex` to compare against `selectedIndex`
+  // so the terra `›` cursor tracks the currently focused row.
+  const leadFor = rowIndex => (rowIndex === selectedIndex ? cursor : indent);
+
+  const emitToggle = (rowIndex, mark, on, label) => {
+    const glyph = on ? '✓' : '✗';
+    const glyphColor = on ? Ansi.TERRA : Ansi.GREY;
+    printer.line(
+      leadFor(rowIndex) +
+      color(mark.padEnd(markCol), Ansi.TERRA) +
+      color(glyph.padEnd(checkCol), glyphColor) +
+      color(label, Ansi.IVORY),
+    );
+  };
+  const emitKnob = (rowIndex, mark, label, value) => {
+    printer.line(
+      leadFor(rowIndex) +
+      color(mark.padEnd(markCol), Ansi.TERRA) +
+      ' '.repeat(checkCol) +
+      color(label.padEnd(labelColWidth), Ansi.IVORY) +
+      color(value, Ansi.IVORY),
+    );
+  };
+  const emitPlain = (rowIndex, mark, label) => {
+    printer.line(
+      leadFor(rowIndex) +
+      color(mark.padEnd(markCol), Ansi.TERRA) +
+      ' '.repeat(checkCol) +
+      color(label, Ansi.IVORY),
+    );
+  };
+
+  emitToggle(0, '1.', features.math, labels.math);
+  emitToggle(1, '2.', features.sessionUsage, labels.sessionUsage);
+  emitToggle(2, '3.', features.toolFold, labels.toolFold);
+  emitKnob(   3, '4.', labels.bodyFontSize, `${theme.bodyFontSize} px`);
+  printer.blank();
+  emitPlain(  4, 'r.', labels.reset);
+  emitPlain(  5, 'b.', labels.back);
+
+  for (let i = 0; i < gaps.menuGapBeforeRule; i++) printer.blank();
+  printer.line(rule);
+  renderHint(printer, indent, hint);
   for (let i = 0; i < LAYOUT.RULE_GAP_BEFORE_PROMPT; i++) printer.blank();
 }
 
 function renderLanguagePicker(options) {
-  const { heading, optionsList } = options;
+  const { heading, optionsList, version, hint } = options;
   clearScreen();
   const { inner, framePad, indent } = frameGeometry();
+  const gaps = verticalGaps();
   const printer = createPrinter(framePad);
   const rule = color('━'.repeat(inner), Ansi.GREY);
   const centered = text => centerLine(text, inner);
 
-  printer.blank();
   printer.line(rule);
-  for (let i = 0; i < LAYOUT.TOP_BLANKS; i++) printer.blank();
-  renderTitle(printer, inner);
-  for (let i = 0; i < LAYOUT.TITLE_GAP_AFTER; i++) printer.blank();
+  for (let i = 0; i < gaps.topBlanks; i++) printer.blank();
+  renderTitle(printer, inner, version);
+  for (let i = 0; i < gaps.titleGapAfter; i++) printer.blank();
   printer.line(centered(color(heading, Ansi.GREY)));
   printer.blank();
   printer.blank();
   renderMenuItems(printer, indent, optionsList);
-  for (let i = 0; i < LAYOUT.MENU_GAP_BEFORE_RULE; i++) printer.blank();
+  for (let i = 0; i < gaps.menuGapBeforeRule; i++) printer.blank();
   printer.line(rule);
+  renderHint(printer, indent, hint);
   for (let i = 0; i < LAYOUT.RULE_GAP_BEFORE_PROMPT; i++) printer.blank();
 }
 
@@ -218,5 +324,6 @@ module.exports = {
   clearScreen,
   promptPrefix,
   renderMainMenu,
+  renderConfigureMenu,
   renderLanguagePicker,
 };
