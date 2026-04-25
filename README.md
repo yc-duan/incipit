@@ -6,6 +6,13 @@
 
 ---
 
+## In short
+
+* **This is not a third-party GUI** — it's a local frontend mod for the official VS Code Claude Code extension. It does not touch network requests, authentication, model routing, or the tool-calling pipeline of any model vendor.
+* **Everything changed lives in the rendering layer** — typography, fonts, math, code blocks, tables, tool-call folding, context size and cache hit indicators, all running locally in your webview.
+
+---
+
 The chat interface in VS Code's Claude Code extension is built for code conversations — wireframe UI elements, an engineering-grade sans-serif font, the occasional high-saturation warning indicator. As a programming tool, that's fine. But Claude's actual output goes well beyond code: mathematical derivations, long-form technical writing, mixed CJK-and-English academic discussion. That content doesn't read well inside a code-oriented interface, and math formulas are not rendered at all.
 
 incipit turns this chat panel into a fully designed reading environment. It is a purely front-end transformation — no features are added, no network requests are modified. It makes Claude Code a place not just for writing code, but for sustained reading, study, and research. It's a local installer: run it once, reload VS Code, no extra dependencies, revertible at any time.
