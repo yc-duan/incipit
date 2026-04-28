@@ -74,7 +74,7 @@ This removes the `incipit` command itself. It does not restore a patched Claude 
 A literary-style interface — warm-black background, cream-toned serif type, color narrowed to lightness steps within a single hue, terracotta surfaced sparingly only on links, emphasis, and the bottom status line.
 
 <p align="center">
-  <img src="docs/screenshots/panel.png" width="540" alt="incipit chat panel as a whole: warm-black background, cream serif body, bottom status line" />
+  <img src="docs/screenshots/panel.png" width="420" alt="incipit chat panel as a whole: warm-black background, cream serif body, bottom status line" />
 </p>
 
 Typography is the interface itself: math rendered, tables in booktabs style, code-block syntax colors muted, tool calls collapsed to a single line, the expanded layer using deep red and deep green for diffs, and character-level differences traced inline in muted accents.
@@ -82,7 +82,7 @@ Typography is the interface itself: math rendered, tables in booktabs style, cod
 Engineering surfaces fold into the same literary style — tool calls, diffs, and the status line share the body's typeface, hue, and emphasis.
 
 <p align="center">
-  <img src="docs/screenshots/tools.png" width="540" alt="incipit tool-call expanded block: deep red / deep green diff backgrounds, restrained line numbers, inline character-level accents — same key as the body" />
+  <img src="docs/screenshots/tools.png" width="420" alt="incipit tool-call expanded block: deep red / deep green diff backgrounds, restrained line numbers, inline character-level accents — same key as the body" />
 </p>
 
 ---

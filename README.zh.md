@@ -72,7 +72,7 @@ npm uninstall -g incipit
 文学风格界面——暖黑底色，米色调衬线字体，色域窄到只剩同色相的明度阶差，陶土红只在链接、强调和底部状态行克制地点出。
 
 <p align="center">
-  <img src="docs/screenshots/panel.png" width="540" alt="incipit 聊天面板整体外观：暖黑底色、米色衬线正文、底部状态行" />
+  <img src="docs/screenshots/panel.png" width="420" alt="incipit 聊天面板整体外观：暖黑底色、米色衬线正文、底部状态行" />
 </p>
 
 排版本身是界面在做的事：数学渲染，表格呈现booktabs，代码块的语法色被压低，工具调用收成一行，展开层用暗红暗绿做 diff，字符级差异再以淡彩在行内细描。
@@ -80,7 +80,7 @@ npm uninstall -g incipit
 工程信息归并为统一的文学风格——工具调用、diff、状态行的字体、色相、强调方式都与正文风格一致。
 
 <p align="center">
-  <img src="docs/screenshots/tools.png" width="540" alt="incipit 工具调用展开块：暗红暗绿 diff 底色、克制行号、字符级行内淡彩，与正文同调" />
+  <img src="docs/screenshots/tools.png" width="420" alt="incipit 工具调用展开块：暗红暗绿 diff 底色、克制行号、字符级行内淡彩，与正文同调" />
 </p>
 
 ---
