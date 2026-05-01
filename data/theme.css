@@ -102,6 +102,12 @@
   --app-mention-chip-foreground: #e0a18b !important;
   --incipit-mention-chip-background-hover: #493932 !important;
   --app-monospace-font-family: Consolas, 'Courier New', monospace !important;
+  --incipit-body-font: 'Reading', 'IBM Plex Serif', 'Noto Sans SC',
+               'Microsoft YaHei UI', 'Microsoft YaHei',
+               'PingFang SC', system-ui, serif;
+  --incipit-code-font: 'Rec Mono Linear', 'Noto Sans SC',
+               'Microsoft YaHei UI', 'Microsoft YaHei',
+               Consolas, Monaco, 'Courier New', monospace;
 }
 
 /* ============================================================
@@ -211,9 +217,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 [data-incipit-message] h4,
 [data-incipit-message] h5,
 [data-incipit-message] h6 {
-  font-family: 'Reading', 'IBM Plex Serif', 'Noto Sans SC',
-               'Microsoft YaHei UI', 'Microsoft YaHei',
-               'PingFang SC', system-ui, serif !important;
+  font-family: var(--incipit-body-font) !important;
   /* Leave smoothing to Chromium so Windows can keep subpixel rendering. */
   font-feature-settings: 'kern', 'liga', 'calt';
 }
@@ -349,7 +353,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
    hierarchy collapses H1 onto H2. Margins keep a touch more breathing room
    than H2 so consecutive sections still feel delineated. */
 [data-incipit-message] h1 {
-  font-family: 'Emphasis', 'Reading', serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-size: 15px;
   font-weight: 400;
   margin: 1.8em 0 0.45em;
@@ -357,7 +361,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   letter-spacing: -0.008em;
 }
 [data-incipit-message] h2 {
-  font-family: 'Emphasis', 'Reading', serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-size: 15px;
   font-weight: 400;
   margin: 1.5em 0 0.4em;
@@ -365,7 +369,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   letter-spacing: -0.008em;
 }
 [data-incipit-message] h3 {
-  font-family: 'Emphasis', 'Reading', serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-size: 14px;
   font-weight: 400;
   margin: 1.2em 0 0.3em;
@@ -373,25 +377,27 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   letter-spacing: -0.004em;
 }
 [data-incipit-message] h4 {
-  font-family: 'Emphasis', 'Reading', serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-size: 1em;
   font-weight: 400;
   margin: 0.9em 0 0.2em;
 }
 [data-incipit-message] h5,
 [data-incipit-message] h6 {
-  font-family: 'Emphasis', 'Reading', serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-size: 1em;
   font-weight: 400;
   margin: 0.8em 0 0.2em;
 }
 
 /* ============================================================
-   Inline `strong` / `b` use the `Emphasis` family.
+   Inline `strong` / `b` use the body font with `font-weight: 400`
+   so the browser picks the real semibold font file instead of
+   synthetic bold.
    ============================================================ */
 [data-incipit-message] strong,
 [data-incipit-message] b {
-  font-family: 'Emphasis', 'Reading', serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-weight: 400 !important;
 }
 
@@ -497,8 +503,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 .katex .text *,
 .katex .textrm,
 .katex .textrm * {
-  font-family: KaTeX_Main, 'Noto Sans SC', 'Microsoft YaHei UI',
-               'Microsoft YaHei', 'PingFang SC', serif !important;
+  font-family: KaTeX_Main, var(--incipit-body-font) !important;
 }
 .claude-math[data-render-error] {
   color: #ff6b6b;
@@ -516,9 +521,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 [data-incipit-footer-button-label],
 [data-incipit-command-label],
 [data-incipit-usage-label] {
-  font-family: 'Reading', 'IBM Plex Serif', Georgia,
-               'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
-               system-ui, serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-size: var(--incipit-body-size, 13px) !important;
   line-height: 1.55 !important;
 }
@@ -530,16 +533,12 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
    smaller but above the 10.7px floor the bare host produces. */
 [data-incipit-menu-item],
 [data-incipit-menu-item-label] {
-  font-family: 'Reading', 'IBM Plex Serif', Georgia,
-               'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
-               system-ui, serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-size: var(--incipit-body-size, 13px) !important;
   line-height: 1.55 !important;
 }
 [data-incipit-menu-item-description] {
-  font-family: 'Reading', 'IBM Plex Serif', Georgia,
-               'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
-               system-ui, serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-size: calc(var(--incipit-body-size, 13px) - 1px) !important;
   line-height: 1.5 !important;
 }
@@ -551,17 +550,13 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 [data-incipit-input-editor]::before,
 [data-incipit-input-editor]::before,
 [data-incipit-input-editor]::before {
-  font-family: 'Reading', 'IBM Plex Serif', Georgia,
-               'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
-               system-ui, serif !important;
+  font-family: var(--incipit-body-font) !important;
 }
 
-/* Tool headers use `Emphasis` with `font-weight: 400` so the browser picks
-   the real semibold font file instead of synthetic bold. */
+/* Tool headers use the body font with `font-weight: 400` so the browser
+   picks the real semibold font file instead of synthetic bold. */
 [data-incipit-tool-name] {
-  font-family: 'Emphasis', 'Reading', 'IBM Plex Serif', Georgia,
-               'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
-               system-ui, serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-size: var(--incipit-body-size, 13px) !important;
   font-weight: 400 !important;
   font-variation-settings: normal;
@@ -574,7 +569,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 [data-incipit-tool-command],
 [data-incipit-tool-path],
 [data-incipit-command-ref] {
-  font-family: 'Rec Mono Linear', Consolas, Monaco, 'Courier New', monospace !important;
+  font-family: var(--incipit-code-font) !important;
   font-variation-settings: "MONO" 1, "CASL" 0, "slnt" 0;
 }
 
@@ -741,7 +736,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
    a code token. */
 [data-incipit-tool-fingerprint-label] {
   margin-left: 0.4em;
-  font-family: 'Reading', Georgia, 'Noto Sans SC', sans-serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-variation-settings: initial;
   font-style: normal;
 }
@@ -793,8 +788,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
    sibling Edit/Read entries on the same row. */
 [data-incipit-tool-grep-filename] {
   margin-left: 0.4em;
-  font-family: 'Emphasis', 'Reading', 'IBM Plex Serif', Georgia,
-               'Noto Sans SC', serif;
+  font-family: var(--incipit-body-font);
   font-weight: 400;
   font-style: normal;
   font-variation-settings: initial;
@@ -879,7 +873,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 /* Label cell — values pulled from host's toolBodyRowLabel computed style:
    11px Consolas (mono fallback), color #BCBCB9, padding 4px 8px 4px 4px. */
 [data-incipit-tool-grep-label] {
-  font-family: 'Rec Mono Linear', Consolas, Monaco, 'Courier New', monospace;
+  font-family: var(--incipit-code-font);
   font-size: 11px;
   font-style: normal;
   font-weight: normal;
@@ -893,7 +887,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 /* Content cell — same font as host's toolBodyRowContent (`<pre>`):
    11px Consolas, color #F8F8F6, pre-wrap so long output stays readable. */
 [data-incipit-tool-grep-content] {
-  font-family: 'Rec Mono Linear', Consolas, Monaco, 'Courier New', monospace;
+  font-family: var(--incipit-code-font);
   font-size: 11px;
   line-height: 1.5;
   color: #f8f8f6;
@@ -980,7 +974,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   border-top: none;
 }
 [data-incipit-tool-use] [class*="toolBodyRowLabel"] {
-  font-family: 'Rec Mono Linear', Consolas, Monaco, 'Courier New', monospace;
+  font-family: var(--incipit-code-font);
   font-size: 11px;
   font-weight: normal;
   font-style: normal;
@@ -992,7 +986,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   white-space: nowrap;
 }
 [data-incipit-tool-use] [class*="toolBodyRowContent"] {
-  font-family: 'Rec Mono Linear', Consolas, Monaco, 'Courier New', monospace;
+  font-family: var(--incipit-code-font);
   font-size: 11px;
   line-height: 1.5;
   color: #f8f8f6;
@@ -1018,7 +1012,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 }
 [data-incipit-tool-use] [class*="toolBodyRowContent"] pre,
 [data-incipit-tool-use] [class*="toolBodyRowContent"] code {
-  font-family: 'Rec Mono Linear', Consolas, Monaco, 'Courier New', monospace;
+  font-family: var(--incipit-code-font);
   font-size: 11px;
   line-height: 1.5;
   color: inherit;
@@ -1076,8 +1070,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
    span is only for missing header paths. */
 [data-incipit-tool-filepath] {
   margin-left: 0.4em;
-  font-family: 'Emphasis', 'Reading', 'IBM Plex Serif', Georgia,
-               'Noto Sans SC', serif;
+  font-family: var(--incipit-body-font);
   font-weight: 400;
   font-style: normal;
   font-variation-settings: initial;
@@ -1127,7 +1120,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   color: #f8f8f6;
   border: 1px solid rgba(248, 248, 246, 0.08);
   border-radius: 3px;
-  font-family: 'Reading', Georgia, 'Noto Sans SC', sans-serif;
+  font-family: var(--incipit-body-font);
   font-size: 12px;
   line-height: 1.4;
   white-space: nowrap;
@@ -1268,7 +1261,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   background: var(--incipit-diff-header-bg);
   color: var(--incipit-diff-header-text);
   border-bottom: 1px solid var(--incipit-diff-header-border);
-  font-family: 'Rec Mono Linear', Consolas, Monaco, 'Courier New', monospace;
+  font-family: var(--incipit-code-font);
   font-variation-settings: "MONO" 1, "CASL" 0, "slnt" 0;
   font-size: 12px;
   line-height: 1;
@@ -1298,7 +1291,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   overflow: hidden;
   background: var(--incipit-diff-surface);
   color: var(--incipit-diff-text);
-  font-family: 'Rec Mono Linear', Consolas, Monaco, 'Courier New', monospace;
+  font-family: var(--incipit-code-font);
   font-variation-settings: "MONO" 1, "CASL" 0, "slnt" 0;
   font-size: 12px;
   line-height: 1.55;
@@ -1367,7 +1360,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   background: transparent !important;
   background-color: transparent !important;
   color: var(--incipit-diff-text);
-  font-family: 'Rec Mono Linear', Consolas, Monaco, 'Courier New', monospace !important;
+  font-family: var(--incipit-code-font) !important;
   font-variation-settings: "MONO" 1, "CASL" 0, "slnt" 0 !important;
   font-size: 12px !important;
   line-height: 1.55 !important;
@@ -1424,7 +1417,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   color: var(--incipit-diff-button-text);
   border: 1px solid var(--incipit-diff-button-border);
   border-radius: 4px;
-  font-family: 'Reading', Georgia, 'Noto Sans SC', sans-serif;
+  font-family: var(--incipit-body-font);
   font-size: 12px;
   line-height: 1.25;
   cursor: pointer;
@@ -1497,7 +1490,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   background: var(--incipit-diff-header-bg);
   color: var(--incipit-diff-header-text);
   border-bottom: 1px solid var(--incipit-diff-header-border);
-  font-family: 'Rec Mono Linear', Consolas, Monaco, 'Courier New', monospace;
+  font-family: var(--incipit-code-font);
   font-variation-settings: "MONO" 1, "CASL" 0, "slnt" 0;
   font-size: 12px;
   line-height: 1;
@@ -1626,7 +1619,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 :where([class*="diffEditorWrapper"], [class*="modalContent_"]) .monaco-editor {
   --vscode-editor-background: var(--incipit-diff-surface) !important;
   --vscode-editorGutter-background: var(--incipit-diff-surface) !important;
-  font-family: 'Rec Mono Linear', Consolas, Monaco, 'Courier New', monospace !important;
+  font-family: var(--incipit-code-font) !important;
   font-variation-settings: "MONO" 1, "CASL" 0, "slnt" 0 !important;
   --vscode-diffEditor-border: var(--incipit-diff-divider, var(--incipit-diff-border)) !important;
   --vscode-diffEditor-insertedTextBorder: transparent !important;
@@ -1683,7 +1676,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 
 :where([class*="diffEditorWrapper"], [class*="modalContent_"]) .monaco-editor .view-line,
 :where([class*="diffEditorWrapper"], [class*="modalContent_"]) .monaco-editor .view-line span {
-  font-family: 'Rec Mono Linear', Consolas, Monaco, 'Courier New', monospace !important;
+  font-family: var(--incipit-code-font) !important;
   font-variation-settings: "MONO" 1, "CASL" 0, "slnt" 0 !important;
   font-weight: normal !important;
   font-style: normal !important;
@@ -1816,7 +1809,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   width: var(--incipit-diff-gutter-width, 42px);
   pointer-events: none;
   z-index: 21;
-  font-family: 'Rec Mono Linear', Consolas, Monaco, 'Courier New', monospace;
+  font-family: var(--incipit-code-font);
   font-variation-settings: "MONO" 1, "CASL" 0, "slnt" 0;
   font-feature-settings: "tnum" 1;
   font-size: 11px;
@@ -1945,7 +1938,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   color: var(--incipit-diff-button-text) !important;
   border-color: var(--incipit-diff-button-border) !important;
   border-radius: 4px !important;
-  font-family: 'Reading', Georgia, 'Noto Sans SC', sans-serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-size: 12px !important;
   line-height: 1.25 !important;
   box-shadow: none !important;
@@ -1962,9 +1955,7 @@ pre code,
 .hljs,
 [data-incipit-message] pre code,
 [data-incipit-markdown-root] pre code {
-  font-family: 'Rec Mono Linear', 'Noto Sans SC',
-               'Microsoft YaHei UI', 'Microsoft YaHei',
-               Consolas, Monaco, 'Courier New', monospace !important;
+  font-family: var(--incipit-code-font) !important;
   font-variation-settings: "MONO" 1, "CASL" 0, "slnt" 0;
   font-size: 0.92em;
   line-height: 1.55;
@@ -2092,7 +2083,7 @@ pre code {
 [data-incipit-markdown-root] table thead th,
 [data-incipit-message] table thead th {
   border-bottom: 1.5px solid rgba(220, 210, 190, 0.45) !important;
-  font-family: 'Emphasis', 'Reading', serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-weight: 400 !important;
   color: rgba(248, 248, 246, 0.72);
   padding-bottom: 6px !important;
@@ -2266,9 +2257,7 @@ pre code {
   background: rgba(31,31,30,0.94);
   color: rgba(248,248,246,0.78);
   box-shadow: 0 4px 14px rgba(0,0,0,0.28);
-  font-family: 'Reading', 'IBM Plex Serif', Georgia,
-               'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
-               system-ui, serif;
+  font-family: var(--incipit-body-font);
   font-size: 12px;
   line-height: 1.35;
   white-space: normal;
@@ -2771,9 +2760,7 @@ pre code {
   border-radius: 10px;
   box-shadow: 0 12px 36px rgba(0,0,0,0.55),
               0 2px 8px rgba(0,0,0,0.35);
-  font-family: 'Reading', 'IBM Plex Serif', Georgia,
-               'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
-               system-ui, serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-size: calc(var(--incipit-body-size, 13px) - 1px);
   line-height: 1.45;
 }
@@ -2789,9 +2776,7 @@ pre code {
   border: none;
   border-radius: 5px;
   color: inherit;
-  font-family: 'Emphasis', 'Reading', 'IBM Plex Serif', Georgia,
-               'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
-               system-ui, serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-size: inherit;
   line-height: inherit;
   font-weight: 400;
@@ -3052,7 +3037,7 @@ pre code {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: #bcbcb9;
-  font-family: 'Rec Mono Linear', Consolas, Monaco, 'Courier New', monospace;
+  font-family: var(--incipit-code-font);
   font-size: 11px;
   line-height: 1.4;
   max-width: 240px;
@@ -3260,7 +3245,7 @@ pre code {
   background: #2c2c2a;
   color: #f8f8f6;
   box-shadow: 0 8px 28px rgba(0,0,0,0.28);
-  font-family: 'Reading', 'IBM Plex Serif', Georgia, 'Noto Sans SC', 'Microsoft YaHei', serif;
+  font-family: var(--incipit-body-font);
   font-size: var(--incipit-body-size, 13px);
   line-height: 1.5;
   opacity: 0;
@@ -3288,9 +3273,7 @@ pre code {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-family: 'Reading', 'IBM Plex Serif', Georgia,
-               'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
-               system-ui, serif;
+  font-family: var(--incipit-body-font);
   font-size: var(--incipit-body-size, 13px);
   font-weight: 400;
   font-variant-numeric: tabular-nums; /* Keep digits monospaced to avoid width jitter. */
@@ -3358,9 +3341,7 @@ pre code {
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 8px;
   box-shadow: 0 12px 36px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.35);
-  font-family: 'Reading', 'IBM Plex Serif', Georgia,
-               'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
-               system-ui, serif;
+  font-family: var(--incipit-body-font);
   font-size: var(--incipit-body-size, 13px);
   line-height: 1.5;
   color: #e8e6dd;
@@ -3374,7 +3355,7 @@ pre code {
   display: block;
 }
 .cceStatHeading {
-  font-family: 'Emphasis', 'Reading', serif;
+  font-family: var(--incipit-body-font);
   font-size: 11px;
   font-weight: 400;
   text-transform: uppercase;
@@ -3692,7 +3673,7 @@ pre code {
 /* Title — Reading serif, slightly looser to match other panel
    titles. Host inherits `--app-primary-foreground` which is fine. */
 [class*="title_yumWmQ"] {
-  font-family: 'Reading', 'IBM Plex Serif', Georgia, 'Noto Sans SC', serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-weight: 400 !important;
   font-size: 14px !important;
   letter-spacing: 0.005em !important;
@@ -3721,7 +3702,7 @@ pre code {
   background-color: rgba(0, 0, 0, 0.18) !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
   color: #f8f8f6 !important;
-  font-family: 'Reading', 'IBM Plex Serif', Georgia, 'Noto Sans SC', serif !important;
+  font-family: var(--incipit-body-font) !important;
 }
 [class*="searchInput_yumWmQ"]:focus {
   border-color: rgba(217, 119, 87, 0.55) !important;
@@ -3751,20 +3732,20 @@ pre code {
    400 cut at 500 weight which Plex tolerates). Keep the weight value
    for the host's intended hierarchy but switch the family. */
 [class*="pluginName_yumWmQ"] {
-  font-family: 'Reading', 'IBM Plex Serif', Georgia, 'Noto Sans SC', serif !important;
+  font-family: var(--incipit-body-font) !important;
   font-weight: 500 !important;
 }
 
 /* Description and meta — let body cascade carry serif. */
 [class*="pluginDescription_yumWmQ"] {
-  font-family: 'Reading', 'IBM Plex Serif', Georgia, 'Noto Sans SC', serif !important;
+  font-family: var(--incipit-body-font) !important;
   line-height: 1.55 !important;
   margin-top: 4px !important;
 }
 
 /* Generic action button — ghost. */
 [class*="actionButton_yumWmQ"] {
-  font-family: 'Reading', 'IBM Plex Serif', Georgia, 'Noto Sans SC', serif !important;
+  font-family: var(--incipit-body-font) !important;
   border-color: rgba(255, 255, 255, 0.16) !important;
 }
 [class*="actionButton_yumWmQ"]:hover {
@@ -3821,7 +3802,7 @@ pre code {
 [class*="menuHeaderHint"] kbd,
 [class*="keys_"] kbd {
   display: inline-block;
-  font-family: 'Rec Mono Linear', Consolas, Menlo, monospace !important;
+  font-family: var(--incipit-code-font) !important;
   font-size: 11.5px !important;
   font-weight: 400 !important;
   font-variant-ligatures: none !important;

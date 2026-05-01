@@ -39,10 +39,26 @@ const DEFAULT_FEATURES = Object.freeze({
 // so warm-black always reports `bodyBold: false`.
 const BODY_FONT_SIZE_OPTIONS = Object.freeze([12, 13, 14]);
 const PALETTE_OPTIONS = Object.freeze(['warm-black', 'warm-white']);
+
+// Preset font-family options. Each entry is [labelKey, cssValue].
+// The labelKey is looked up via i18n; cssValue is the raw font-family stack.
+const BODY_FONT_FAMILY_OPTIONS = Object.freeze([
+  ['plex-serif', "'Reading', 'IBM Plex Serif', 'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', system-ui, serif"],
+  ['georgia', "Georgia, 'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', system-ui, serif"],
+  ['system-serif', "system-ui, -apple-system, 'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', serif"],
+]);
+const CODE_FONT_FAMILY_OPTIONS = Object.freeze([
+  ['rec-mono', "'Rec Mono Linear', 'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', Consolas, Monaco, 'Courier New', monospace"],
+  ['jetbrains-mono', "'JetBrains Mono', 'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', Consolas, Monaco, 'Courier New', monospace"],
+  ['system-mono', "Consolas, Monaco, 'Courier New', 'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', monospace"],
+]);
+
 const DEFAULT_THEME = Object.freeze({
   bodyFontSize: 13,
   palette: 'warm-black',
   bodyBold: false,
+  bodyFontFamily: 'plex-serif',
+  codeFontFamily: 'rec-mono',
 });
 
 function readConfig() {
@@ -151,7 +167,30 @@ function getTheme() {
   // config from a previous warm-white session can never spuriously
   // activate the PaperReading gate after the user switched themes.
   const bodyBold = (palette === 'warm-white' && raw.bodyBold === true);
-  return { bodyFontSize: size, palette, bodyBold };
+  const bodyFontFamily = resolveBodyFontFamily(raw.bodyFontFamily);
+  const codeFontFamily = resolveCodeFontFamily(raw.codeFontFamily);
+  return { bodyFontSize: size, palette, bodyBold, bodyFontFamily, codeFontFamily };
+}
+
+function resolveBodyFontFamily(saved) {
+  const preset = BODY_FONT_FAMILY_OPTIONS.find(([key]) => key === saved);
+  if (preset) return { key: saved, css: preset[1] };
+  // Custom or missing: fall back to default if no valid custom string.
+  if (typeof saved === 'string' && saved.trim().length > 0) {
+    return { key: 'custom', css: saved.trim() };
+  }
+  const def = BODY_FONT_FAMILY_OPTIONS[0];
+  return { key: def[0], css: def[1] };
+}
+
+function resolveCodeFontFamily(saved) {
+  const preset = CODE_FONT_FAMILY_OPTIONS.find(([key]) => key === saved);
+  if (preset) return { key: saved, css: preset[1] };
+  if (typeof saved === 'string' && saved.trim().length > 0) {
+    return { key: 'custom', css: saved.trim() };
+  }
+  const def = CODE_FONT_FAMILY_OPTIONS[0];
+  return { key: def[0], css: def[1] };
 }
 
 function setBodyFontSize(size) {
@@ -159,8 +198,8 @@ function setBodyFontSize(size) {
     throw new Error(`Unsupported body font size: ${size}`);
   }
   const cfg = readConfig();
-  const current = getTheme();
-  cfg.theme = { ...current, bodyFontSize: size };
+  const raw = (cfg.theme && typeof cfg.theme === 'object') ? cfg.theme : {};
+  cfg.theme = { ...raw, bodyFontSize: size };
   writeConfig(cfg);
 }
 
@@ -169,8 +208,8 @@ function setPalette(palette) {
     throw new Error(`Unsupported palette: ${palette}`);
   }
   const cfg = readConfig();
-  const current = getTheme();
-  cfg.theme = { ...current, palette };
+  const raw = (cfg.theme && typeof cfg.theme === 'object') ? cfg.theme : {};
+  cfg.theme = { ...raw, palette };
   writeConfig(cfg);
 }
 
@@ -179,8 +218,22 @@ function setBodyBold(value) {
     throw new Error('bodyBold must be boolean');
   }
   const cfg = readConfig();
-  const current = getTheme();
-  cfg.theme = { ...current, bodyBold: value };
+  const raw = (cfg.theme && typeof cfg.theme === 'object') ? cfg.theme : {};
+  cfg.theme = { ...raw, bodyBold: value };
+  writeConfig(cfg);
+}
+
+function setBodyFontFamily(keyOrCss) {
+  const cfg = readConfig();
+  const raw = (cfg.theme && typeof cfg.theme === 'object') ? cfg.theme : {};
+  cfg.theme = { ...raw, bodyFontFamily: keyOrCss };
+  writeConfig(cfg);
+}
+
+function setCodeFontFamily(keyOrCss) {
+  const cfg = readConfig();
+  const raw = (cfg.theme && typeof cfg.theme === 'object') ? cfg.theme : {};
+  cfg.theme = { ...raw, codeFontFamily: keyOrCss };
   writeConfig(cfg);
 }
 
@@ -304,6 +357,8 @@ module.exports = {
   DEFAULT_THEME,
   BODY_FONT_SIZE_OPTIONS,
   PALETTE_OPTIONS,
+  BODY_FONT_FAMILY_OPTIONS,
+  CODE_FONT_FAMILY_OPTIONS,
   readConfig,
   writeConfig,
   pruneRetiredConfigKeys,
@@ -315,6 +370,8 @@ module.exports = {
   setBodyFontSize,
   setPalette,
   setBodyBold,
+  setBodyFontFamily,
+  setCodeFontFamily,
   resetConfigurable,
   getStoredTargets,
   setLastUsedTargetId,

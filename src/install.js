@@ -72,11 +72,21 @@ const SYSTEM_FONT_FILES = [
 // The chat input font is configured only through `settings.json`.
 // `theme.css` does not style the real contenteditable input because CSS
 // overrides there can trigger caret drift in Chromium.
-const CHAT_FONT_FAMILY_STACK =
+const CHAT_FONT_SIZE = 13;
+
+// Default chat input font stack, used when theme bodyFontFamily is unavailable.
+const CHAT_FONT_FAMILY_STACK_DEFAULT =
   "'IBM Plex Serif', Georgia, " +
   "'Microsoft YaHei UI', 'Microsoft YaHei', " +
   "'PingFang SC', system-ui, serif";
-const CHAT_FONT_SIZE = 13;
+
+function buildChatFontFamilyStack(theme) {
+  const bodyCss = theme && theme.bodyFontFamily && theme.bodyFontFamily.css;
+  if (typeof bodyCss === 'string' && bodyCss.trim().length > 0) {
+    return bodyCss;
+  }
+  return CHAT_FONT_FAMILY_STACK_DEFAULT;
+}
 
 // The complete list of VS Code user settings keys that `setChatFontToSerif`
 // may write. Exposed for the backup module so that it can snapshot these
@@ -584,9 +594,17 @@ function buildWebviewConfigPreamble(features, theme, language) {
 }
 
 function buildThemeOverrideBlock(theme) {
+  const bodyFont = theme.bodyFontFamily && theme.bodyFontFamily.css
+    ? theme.bodyFontFamily.css
+    : "'Reading', 'IBM Plex Serif', 'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', system-ui, serif";
+  const codeFont = theme.codeFontFamily && theme.codeFontFamily.css
+    ? theme.codeFontFamily.css
+    : "'Rec Mono Linear', 'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', Consolas, Monaco, 'Courier New', monospace";
   return '\n\n/* incipit user theme overrides (generated at apply; do not edit) */\n' +
          ':root {\n' +
          `  --incipit-body-size: ${theme.bodyFontSize}px;\n` +
+         `  --incipit-body-font: ${bodyFont};\n` +
+         `  --incipit-code-font: ${codeFont};\n` +
          '}\n';
 }
 
@@ -743,16 +761,18 @@ function installSerifSystemFonts(resourceRoot) {
 
 // Return whether either setting changed. `fontSize` must be one of the
 // discrete body-size options; the caller is expected to pass `getTheme()
-// .bodyFontSize` but a stray value falls back to the default. Explicit
-// `settingsPath` overrides the platform-default fallback — that is how
-// custom (Cursor / Scoop / portable) targets get their settings.json.
-function setChatFontToSerif(fontSize, settingsPath) {
+// .bodyFontSize` but a stray value falls back to the default. `theme` is
+// used to read the configured body font family for the chat input stack.
+// Explicit `settingsPath` overrides the platform-default fallback — that
+// is how custom (Cursor / Scoop / portable) targets get their settings.json.
+function setChatFontToSerif(fontSize, theme, settingsPath) {
   const size = BODY_FONT_SIZE_OPTIONS.includes(fontSize) ? fontSize : CHAT_FONT_SIZE;
+  const fontFamily = buildChatFontFamilyStack(theme);
   const path_ = settingsPath || vscodeUserSettingsPath();
-  return writeChatFontSettings(path_, size);
+  return writeChatFontSettings(path_, size, fontFamily);
 }
 
-function writeChatFontSettings(settingsPath, size) {
+function writeChatFontSettings(settingsPath, size, fontFamily) {
   const parent = path.dirname(settingsPath);
   if (!fs.existsSync(parent)) {
     // Skip when the VS Code user settings directory does not exist yet.
@@ -774,13 +794,13 @@ function writeChatFontSettings(settingsPath, size) {
   }
 
   if (
-    data['chat.fontFamily'] === CHAT_FONT_FAMILY_STACK &&
+    data['chat.fontFamily'] === fontFamily &&
     data['chat.fontSize'] === size
   ) {
     return false;
   }
 
-  data['chat.fontFamily'] = CHAT_FONT_FAMILY_STACK;
+  data['chat.fontFamily'] = fontFamily;
   data['chat.fontSize'] = size;
   fs.mkdirSync(parent, { recursive: true });
   fs.writeFileSync(
@@ -1304,12 +1324,15 @@ function installClaudeCodeVSCodeEnhance(resourceRoot, options = {}) {
   // path comes from the resolved target so custom Cursor / Scoop /
   // portable installs write into the right `User/settings.json`.
   const serifWritten = installSerifSystemFonts(resourceRoot);
-  const chatFontUpdated = setChatFontToSerif(theme.bodyFontSize, target.settingsPath);
+  const chatFontUpdated = setChatFontToSerif(theme.bodyFontSize, theme, target.settingsPath);
   const serifStatus = serifWritten > 0
     ? `已写入 ${serifWritten}/${SYSTEM_FONT_FILES.length}`
     : `已存在 (${SYSTEM_FONT_FILES.length} 个)`;
+  const chatFontLabel = theme.bodyFontFamily && theme.bodyFontFamily.key === 'custom'
+    ? 'Custom'
+    : (theme.bodyFontFamily && theme.bodyFontFamily.key) || 'plex-serif';
   const chatFontStatus = chatFontUpdated
-    ? `已更新 → Plex Serif ${theme.bodyFontSize}px`
+    ? `已更新 → ${chatFontLabel} ${theme.bodyFontSize}px`
     : '已是目标值';
 
   const statusLines = [
