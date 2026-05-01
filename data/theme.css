@@ -202,7 +202,6 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 [data-incipit-message] > ul,
 [data-incipit-message] > ol,
 [data-incipit-message] > blockquote {
-  max-width: 100%;
   width: 100%;
   box-sizing: border-box;
 }
