@@ -185,7 +185,15 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 }
 
 
-/* Limit reading width to 64ch for the narrower webview measure. */
+/*
+  Adaptive reading width.
+
+  At very narrow viewports (e.g. sidebar ~320 px) the lower bound keeps lines
+  readable.  At moderate widths the preferred 64ch preserves comfortable
+  measure for prose.  On wide screens the upper bound prevents lines from
+  stretching too long.  The formula is pure CSS so it reacts instantly to
+  container / window resizes without JS overhead.
+*/
 [data-incipit-markdown-root] > p,
 [data-incipit-markdown-root] > ul,
 [data-incipit-markdown-root] > ol,
@@ -194,7 +202,9 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 [data-incipit-message] > ul,
 [data-incipit-message] > ol,
 [data-incipit-message] > blockquote {
-  max-width: 64ch;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Apply the body face across text elements. `unicode-range` routes Latin to
