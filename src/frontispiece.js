@@ -422,9 +422,11 @@ function renderConfigureMenu(options) {
   emitToggle(1, '2.', features.sessionUsage, labels.sessionUsage);
   emitKnob(   2, '3.', labels.bodyFontSize, `${theme.bodyFontSize} px`);
   emitKnob(   3, '4.', labels.palette, labels.paletteValue);
+  emitKnob(   4, '5.', labels.bodyFont, labels.bodyFontValue);
+  emitKnob(   5, '6.', labels.codeFont, labels.codeFontValue);
   printer.blank();
-  emitPlain(  4, 'r.', labels.reset);
-  emitPlain(  5, 'b.', labels.back);
+  emitPlain(  6, 'r.', labels.reset);
+  emitPlain(  7, 'b.', labels.back);
   printer.scrollEnd();
 
   for (let i = 0; i < gaps.menuGapBeforeRule; i++) printer.blank();

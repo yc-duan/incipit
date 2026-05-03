@@ -112,9 +112,7 @@
 :root[data-incipit-body-bold] [data-incipit-message] blockquote,
 :root[data-incipit-body-bold] [data-incipit-user-bubble],
 :root[data-incipit-body-bold] [data-incipit-user-bubble] [data-incipit-user-content] {
-  font-family: 'PaperReading', 'Reading', 'IBM Plex Serif', 'Noto Sans SC',
-               'Microsoft YaHei UI', 'Microsoft YaHei',
-               'PingFang SC', system-ui, serif !important;
+  font-family: 'PaperReading', var(--incipit-body-font) !important;
 }
 
 /* ---------- Base surface ---------- */

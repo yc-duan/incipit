@@ -159,7 +159,7 @@ export const APP_VAR_OVERRIDES = {
   '--app-secondary-text': SOFT_FG_2,
   '--app-mention-chip-background': MENTION_CHIP_BG,
   '--app-mention-chip-foreground': MENTION_CHIP_FG,
-  '--app-monospace-font-family': "Consolas, 'Courier New', monospace",
+  '--app-monospace-font-family': 'var(--incipit-code-font)',
 };
 
 let appVarApplyScheduled = false;

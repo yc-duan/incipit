@@ -30,8 +30,12 @@ const {
   setBodyFontSize,
   setPalette,
   setBodyBold,
+  setBodyFontFamily,
+  setCodeFontFamily,
   resetConfigurable,
   BODY_FONT_SIZE_OPTIONS,
+  BODY_FONT_FAMILY_OPTIONS,
+  CODE_FONT_FAMILY_OPTIONS,
   DEFAULT_THEME,
   getStoredTargets,
   setLastUsedTargetId,
@@ -380,11 +384,15 @@ function formatApplyConfigInline(features, theme) {
   const off = t('apply.summary_off');
   const label = t('apply.report.config_label');
   const separator = label.endsWith('：') ? '' : ' ';
+  const bodyFontLabel = fontLabelForKey(theme && theme.bodyFontFamily && theme.bodyFontFamily.key || DEFAULT_THEME.bodyFontFamily, 'body', theme);
+  const codeFontLabel = fontLabelForKey(theme && theme.codeFontFamily && theme.codeFontFamily.key || DEFAULT_THEME.codeFontFamily, 'code', theme);
   const parts = [
     `${t('configure.feature_math')} ${features && features.math ? on : off}`,
     `${t('configure.feature_session')} ${features && features.sessionUsage ? on : off}`,
     `${t('configure.param_body_size')} ${theme && theme.bodyFontSize ? theme.bodyFontSize : DEFAULT_THEME.bodyFontSize} px`,
     paletteDisplayLabel(theme || DEFAULT_THEME),
+    `${t('configure.param_body_font')} ${bodyFontLabel}`,
+    `${t('configure.param_code_font')} ${codeFontLabel}`,
   ];
   return color(label, Ansi.GREY) + separator + color(parts.join(' · '), Ansi.IVORY);
 }
@@ -634,6 +642,9 @@ async function handleConfigure() {
 
     const paletteValue = paletteDisplayLabel(theme);
 
+    const bodyFontLabel = fontLabelForKey(theme.bodyFontFamily.key, 'body', theme);
+    const codeFontLabel = fontLabelForKey(theme.codeFontFamily.key, 'code', theme);
+
     const render = () => renderConfigureMenu({
       version: PACKAGE_VERSION,
       heading: t('configure.heading'),
@@ -647,13 +658,17 @@ async function handleConfigure() {
         bodyFontSize: t('configure.param_body_size'),
         palette: t('configure.param_palette'),
         paletteValue,
+        bodyFont: t('configure.param_body_font'),
+        bodyFontValue: bodyFontLabel,
+        codeFont: t('configure.param_code_font'),
+        codeFontValue: codeFontLabel,
         reset: t('configure.reset'),
         back: t('configure.back'),
       },
     });
 
-    // Rows: math, session, bodysize, palette, reset, back.
-    const ROW_COUNT = 6;
+    // Rows: math, session, bodysize, palette, bodyfont, codefont, reset, back.
+    const ROW_COUNT = 8;
 
     const outcome = await keyLoop({
       render,
@@ -685,8 +700,10 @@ async function handleConfigure() {
           }
           if (index === 2) return { done: true, result: { action: 'bodysize' } };
           if (index === 3) return { done: true, result: { action: 'palette' } };
-          if (index === 4) return { done: true, result: { action: 'reset' } };
-          if (index === 5) return { done: true, result: { action: 'back' } };
+          if (index === 4) return { done: true, result: { action: 'bodyfont' } };
+          if (index === 5) return { done: true, result: { action: 'codefont' } };
+          if (index === 6) return { done: true, result: { action: 'reset' } };
+          if (index === 7) return { done: true, result: { action: 'back' } };
           return;
         }
         // Letter shortcuts (r for reset, number for direct row activation).
@@ -697,6 +714,8 @@ async function handleConfigure() {
         if (str === '2') { index = 1; return { done: true, result: { action: 'toggle', index: 1 } }; }
         if (str === '3') { index = 2; return { done: true, result: { action: 'bodysize' } }; }
         if (str === '4') { index = 3; return { done: true, result: { action: 'palette' } }; }
+        if (str === '5') { index = 4; return { done: true, result: { action: 'bodyfont' } }; }
+        if (str === '6') { index = 5; return { done: true, result: { action: 'codefont' } }; }
       },
     });
 
@@ -714,6 +733,14 @@ async function handleConfigure() {
       await choosePalette();
       continue;
     }
+    if (outcome.action === 'bodyfont') {
+      await chooseBodyFontFamily();
+      continue;
+    }
+    if (outcome.action === 'codefont') {
+      await chooseCodeFontFamily();
+      continue;
+    }
     if (outcome.action === 'reset') {
       const confirmed = await confirmReset();
       if (confirmed) {
@@ -723,6 +750,43 @@ async function handleConfigure() {
       continue;
     }
   }
+}
+
+function normalizeCustomFontInput(raw, fallback) {
+  if (!raw) return '';
+  const value = String(raw).trim();
+  if (!value) return '';
+  // Reject characters that cannot appear in a valid font-family value.
+  if (/[;{}\r\n]/.test(value)) {
+    return '';
+  }
+  // Already a full CSS stack (contains commas) or ends with a generic family.
+  if (/,/.test(value) || /\b(?:serif|sans-serif|monospace|cursive|fantasy|system-ui)\b$/i.test(value)) {
+    return value;
+  }
+  // Single font name: wrap in quotes and append the intended fallback.
+  const fb = fallback || 'serif';
+  const fontName = value.replace(/^["']|["']$/g, '');
+  return `"${fontName}", ${fb}`;
+}
+
+function fontLabelForKey(key, kind, theme) {
+  if (key === 'custom') {
+    const css = theme && (
+      kind === 'body'
+        ? theme.bodyFontFamily && theme.bodyFontFamily.css
+        : theme.codeFontFamily && theme.codeFontFamily.css
+    );
+    const display = css && css.length > 20 ? css.slice(0, 20) + '...' : css;
+    return display
+      ? `${t('configure.font_custom_label')} (${display})`
+      : t('configure.font_custom_label');
+  }
+  const map = kind === 'body'
+    ? new Map(BODY_FONT_FAMILY_OPTIONS)
+    : new Map(CODE_FONT_FAMILY_OPTIONS);
+  if (map.has(key)) return t(`configure.font_${key.replace(/-/g, '_')}`);
+  return key;
 }
 
 // ============================================================
@@ -1697,6 +1761,146 @@ async function choosePalette() {
     setPalette(outcome.pick.palette);
     setBodyBold(outcome.pick.bodyBold);
   }
+}
+
+async function chooseBodyFontFamily() {
+  const defaultMark = t('configure.body_size_default_mark');
+  const current = getTheme().bodyFontFamily;
+  const presets = BODY_FONT_FAMILY_OPTIONS.map(([key]) => ({ key, label: t(`configure.font_${key.replace(/-/g, '_')}`) }));
+  const rows = [
+    ...presets.map((p, idx) => ({ mark: `${idx + 1}.`, ...p })),
+    { mark: `${presets.length + 1}.`, key: 'custom', label: t('configure.font_custom_label') },
+  ];
+  let index = Math.max(0, rows.findIndex(r => r.key === current.key));
+  if (index < 0) index = rows.length - 1; // custom
+
+  const render = () => {
+    const options = rows.map((row, idx) => ({
+      mark: row.mark,
+      label: row.label + (row.key === DEFAULT_THEME.bodyFontFamily ? `  ${defaultMark}` : ''),
+      selected: idx === index,
+    }));
+    options.push({ mark: 'b.', label: t('configure.back'), selected: index === rows.length });
+    renderLanguagePicker({
+      version: PACKAGE_VERSION,
+      heading: t('configure.body_font_heading'),
+      optionsList: options,
+      hint: t('hint.picker'),
+    });
+  };
+
+  const total = rows.length + 1;
+  const outcome = await keyLoop({
+    render,
+    onKey: (str, key) => {
+      if (!key) return;
+      if (key.name === 'up' || key.name === 'k') {
+        index = (index - 1 + total) % total;
+        return;
+      }
+      if (key.name === 'down' || key.name === 'j') {
+        index = (index + 1) % total;
+        return;
+      }
+      if (key.name === 'backspace' || key.name === 'escape' ||
+          key.name === 'b' || key.name === 'q' ||
+          str === 'b' || str === 'q') {
+        return { done: true, result: { back: true } };
+      }
+      if (key.name === 'return' || key.name === 'enter') {
+        if (index < rows.length) {
+          return { done: true, result: { pick: rows[index].key } };
+        }
+        return { done: true, result: { back: true } };
+      }
+      const n = parseInt(str, 10);
+      if (Number.isFinite(n) && n >= 1 && n <= rows.length) {
+        return { done: true, result: { pick: rows[n - 1].key } };
+      }
+    },
+  });
+
+  if (outcome.pick === 'custom') {
+    resetScreenForPrompt();
+    console.log();
+    console.log('  ' + color(t('configure.font_custom_prompt'), Ansi.GREY));
+    let raw;
+    try { raw = await prompt('  > '); } catch (_) { raw = ''; }
+    const css = normalizeCustomFontInput(String(raw || '').trim(), 'serif');
+    if (css) setBodyFontFamily(css);
+    return;
+  }
+  if (outcome.pick != null) setBodyFontFamily(outcome.pick);
+}
+
+async function chooseCodeFontFamily() {
+  const defaultMark = t('configure.body_size_default_mark');
+  const current = getTheme().codeFontFamily;
+  const presets = CODE_FONT_FAMILY_OPTIONS.map(([key]) => ({ key, label: t(`configure.font_${key.replace(/-/g, '_')}`) }));
+  const rows = [
+    ...presets.map((p, idx) => ({ mark: `${idx + 1}.`, ...p })),
+    { mark: `${presets.length + 1}.`, key: 'custom', label: t('configure.font_custom_label') },
+  ];
+  let index = Math.max(0, rows.findIndex(r => r.key === current.key));
+  if (index < 0) index = rows.length - 1;
+
+  const render = () => {
+    const options = rows.map((row, idx) => ({
+      mark: row.mark,
+      label: row.label + (row.key === DEFAULT_THEME.codeFontFamily ? `  ${defaultMark}` : ''),
+      selected: idx === index,
+    }));
+    options.push({ mark: 'b.', label: t('configure.back'), selected: index === rows.length });
+    renderLanguagePicker({
+      version: PACKAGE_VERSION,
+      heading: t('configure.code_font_heading'),
+      optionsList: options,
+      hint: t('hint.picker'),
+    });
+  };
+
+  const total = rows.length + 1;
+  const outcome = await keyLoop({
+    render,
+    onKey: (str, key) => {
+      if (!key) return;
+      if (key.name === 'up' || key.name === 'k') {
+        index = (index - 1 + total) % total;
+        return;
+      }
+      if (key.name === 'down' || key.name === 'j') {
+        index = (index + 1) % total;
+        return;
+      }
+      if (key.name === 'backspace' || key.name === 'escape' ||
+          key.name === 'b' || key.name === 'q' ||
+          str === 'b' || str === 'q') {
+        return { done: true, result: { back: true } };
+      }
+      if (key.name === 'return' || key.name === 'enter') {
+        if (index < rows.length) {
+          return { done: true, result: { pick: rows[index].key } };
+        }
+        return { done: true, result: { back: true } };
+      }
+      const n = parseInt(str, 10);
+      if (Number.isFinite(n) && n >= 1 && n <= rows.length) {
+        return { done: true, result: { pick: rows[n - 1].key } };
+      }
+    },
+  });
+
+  if (outcome.pick === 'custom') {
+    resetScreenForPrompt();
+    console.log();
+    console.log('  ' + color(t('configure.font_custom_prompt'), Ansi.GREY));
+    let raw;
+    try { raw = await prompt('  > '); } catch (_) { raw = ''; }
+    const css = normalizeCustomFontInput(String(raw || '').trim(), 'monospace');
+    if (css) setCodeFontFamily(css);
+    return;
+  }
+  if (outcome.pick != null) setCodeFontFamily(outcome.pick);
 }
 
 async function chooseCliLanguage() {
