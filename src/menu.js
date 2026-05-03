@@ -88,6 +88,19 @@ function resetScreenForPrompt() {
   if (!invalidateScreenSession({ history: true })) clearScreen({ history: true });
 }
 
+function resetScreenForMenuTransition() {
+  if (!invalidateScreenSession({ history: true })) clearScreen({ history: true });
+}
+
+async function runScreenTransition(work) {
+  resetScreenForMenuTransition();
+  try {
+    return await work();
+  } finally {
+    resetScreenForMenuTransition();
+  }
+}
+
 const PACKAGE_ROOT = path.resolve(__dirname, '..');
 
 function loadPackageVersion() {
@@ -374,7 +387,6 @@ function buildPatchTree(result) {
   return [
     { name: 'extension.js', desc: t('apply.report.desc.extension_js') },
     { name: 'webview/', desc: t('apply.report.desc.webview_dir'), children: webviewChildren },
-    { name: 'settings.json', desc: t('apply.report.desc.settings_json') },
     { name: 'system fonts', desc: t('apply.report.desc.system_fonts', { files: fileCount(fontTotal) }) },
   ];
 }
@@ -408,13 +420,12 @@ function formatApplyChangeSummary(result) {
 function countApplyReportEntries(report) {
   const rootFiles = report.rootWebviewFiles || [];
   const assetTrees = report.assetTrees || [];
-  let total = 4 + rootFiles.length + assetTrees.length; // extension.js, webview/index.js, settings, system fonts
+  let total = 3 + rootFiles.length + assetTrees.length; // extension.js, webview/index.js, system fonts
   let changed = 0;
   if (report.extensionJs && report.extensionJs.updated) changed++;
   if (report.webviewIndex && report.webviewIndex.updated) changed++;
   changed += rootFiles.filter(file => file.written).length;
   changed += assetTrees.filter(tree => tree.written > 0).length;
-  if (report.settings && report.settings.updated) changed++;
   if (report.systemFonts && report.systemFonts.written > 0) changed++;
   if (!Number.isFinite(total) || total < 0) total = changed;
   return { changed, total };
@@ -726,19 +737,19 @@ async function handleConfigure() {
       continue;
     }
     if (outcome.action === 'bodysize') {
-      await chooseBodyFontSize();
+      await runScreenTransition(chooseBodyFontSize);
       continue;
     }
     if (outcome.action === 'palette') {
-      await choosePalette();
+      await runScreenTransition(choosePalette);
       continue;
     }
     if (outcome.action === 'bodyfont') {
-      await chooseBodyFontFamily();
+      await runScreenTransition(chooseBodyFontFamily);
       continue;
     }
     if (outcome.action === 'codefont') {
-      await chooseCodeFontFamily();
+      await runScreenTransition(chooseCodeFontFamily);
       continue;
     }
     if (outcome.action === 'reset') {
@@ -1823,6 +1834,8 @@ async function chooseBodyFontFamily() {
   if (outcome.pick === 'custom') {
     resetScreenForPrompt();
     console.log();
+    console.log('  ' + color(t('configure.font_custom_warning_body'), Ansi.YELLOW));
+    console.log();
     console.log('  ' + color(t('configure.font_custom_prompt'), Ansi.GREY));
     let raw;
     try { raw = await prompt('  > '); } catch (_) { raw = ''; }
@@ -1892,6 +1905,8 @@ async function chooseCodeFontFamily() {
 
   if (outcome.pick === 'custom') {
     resetScreenForPrompt();
+    console.log();
+    console.log('  ' + color(t('configure.font_custom_warning_code'), Ansi.YELLOW));
     console.log();
     console.log('  ' + color(t('configure.font_custom_prompt'), Ansi.GREY));
     let raw;
@@ -2324,17 +2339,17 @@ async function runInteractiveScreenLoop() {
     const action = await selectMainMenu();
     if (action === 'quit' || (action && action.action === 'back')) return 'quit';
     if (action === 'apply') {
-      const target = await chooseApplyTargetInteractive();
+      const target = await runScreenTransition(chooseApplyTargetInteractive);
       if (!target) continue;
       return { action: 'apply', target };
     }
     if (action === 'restore') return { action: 'restore' };
     if (action === 'configure') {
-      await handleConfigure();
+      await runScreenTransition(handleConfigure);
     } else if (action === 'target') {
-      await handleTarget();
+      await runScreenTransition(handleTarget);
     } else if (action === 'language') {
-      await chooseCliLanguage();
+      await runScreenTransition(chooseCliLanguage);
     }
   }
 }

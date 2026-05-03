@@ -1,6 +1,6 @@
 // backup / restore
 //
-// What gets backed up, and why the two categories are handled differently:
+// What gets backed up, and why restore still understands one legacy entry:
 //
 //   1. `extension.js` and the whole `webview/` directory live under
 //      Claude Code's extension directory. We rewrite `extension.js`, patch
@@ -9,15 +9,11 @@
 //      full restore is the only correct operation: restoring only the
 //      patched entry files would leave incipit-owned webview assets behind.
 //
-//   2. `settings.json` is VS Code's global user settings — shared with
-//      every other extension and every other user preference. We only
-//      touch two keys (`chat.fontFamily` / `chat.fontSize`), so backing
-//      up the whole file and blasting it back on restore would wipe any
-//      unrelated settings the user changed between apply and restore.
-//      Instead we snapshot only the PRE-apply state of the specific
-//      keys we intend to write (including a tombstone if a key was
-//      absent), and on restore we surgically roll back just those keys,
-//      leaving everything else in the current settings.json untouched.
+//   2. Older incipit builds also created a sparse `settings.json` entry for
+//      `chat.fontFamily` / `chat.fontSize`. Current apply no longer writes
+//      those VS Code user settings and current backups do not create that
+//      entry, but restore keeps the sparse-json path so old backups can
+//      surgically roll back only the keys incipit previously touched.
 //
 // Layout on disk:
 //   ~/.incipit-backup/
@@ -46,11 +42,6 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-
-const {
-  vscodeUserSettingsPath,
-  CHAT_FONT_SETTING_KEYS,
-} = require('./install');
 
 const BACKUP_ROOT = path.join(os.homedir(), '.incipit-backup');
 const BACKUP_MANIFEST_NAME = 'manifest.json';
@@ -390,39 +381,6 @@ function deserializeEntry(e, backupDir) {
 
 // --------------------------- backup creation ---------------------------
 
-// Read the CURRENT state of the settings.json keys that apply is about
-// to overwrite, so we can surgically roll them back later. If the file
-// doesn't exist or fails to parse as JSON, every key is recorded as
-// "didn't exist before".
-function snapshotSparseJson(jsonPath, keys) {
-  const entry = {
-    type:         'sparse_json',
-    logicalName:  'vscode_settings.json',
-    originalPath: jsonPath,
-    keys:         keys.map(k => ({ key: k, hadBefore: false, oldValue: undefined })),
-  };
-  if (!fs.existsSync(jsonPath)) return entry;
-  let data;
-  try {
-    const text = fs.readFileSync(jsonPath, 'utf8');
-    data = text.trim() ? JSON.parse(text) : {};
-  } catch (_) {
-    // JSONC or corrupted JSON — treat as "unknown", leave tombstones
-    // in place. Restore will then simply delete our keys if present.
-    return entry;
-  }
-  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
-    return entry;
-  }
-  for (const slot of entry.keys) {
-    if (Object.prototype.hasOwnProperty.call(data, slot.key)) {
-      slot.hadBefore = true;
-      slot.oldValue  = data[slot.key];
-    }
-  }
-  return entry;
-}
-
 function snapshotFile(logicalName, src, backupDir) {
   if (!fs.existsSync(src)) {
     return {
@@ -492,11 +450,9 @@ function createBackup(target, opts = {}) {
   }
   fs.mkdirSync(backupDir, { recursive: true });
 
-  const settingsPath = target.settingsPath || vscodeUserSettingsPath();
   const entries = [
     snapshotFile('extension.js',      target.extensionJsPath,     backupDir),
     snapshotDirectory('webview_dir',  path.dirname(target.webviewIndexJsPath), backupDir),
-    snapshotSparseJson(settingsPath, Array.from(CHAT_FONT_SETTING_KEYS)),
   ];
 
   const manifest = {

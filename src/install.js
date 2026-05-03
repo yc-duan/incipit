@@ -2,9 +2,9 @@
 //
 // This module locates the local Claude Code extension, patches
 // `extension.js` and `webview/index.js`, syncs webview assets, installs
-// system fonts, and writes `chat.fontFamily` / `chat.fontSize` into
-// VS Code `settings.json`. The regex anchors target the minified bundle
-// shape and may need to move when the extension updates.
+// system fonts, and writes webview-side theme assets. The regex anchors
+// target the minified bundle shape and may need to move when the extension
+// updates.
 
 'use strict';
 
@@ -24,9 +24,7 @@ const {
   getTheme,
   getLanguage,
   pruneRetiredConfigKeys,
-  BODY_FONT_SIZE_OPTIONS,
 } = require('./config');
-const { t } = require('./i18n');
 
 const CLAUDE_CODE_EXTENSION_PREFIX = 'anthropic.claude-code-';
 const ENHANCE_TARGET_NAME = 'enhance.js';
@@ -70,45 +68,17 @@ const SYSTEM_FONT_FILES = [
   ['IBMPlexSerif-SemiBold.ttf', 'ibm-plex-serif', 'IBM Plex Serif SemiBold (TrueType)'],
 ];
 
-// The chat input font is configured only through `settings.json`.
-// `theme.css` does not style the real contenteditable input because CSS
-// overrides there can trigger caret drift in Chromium.
-const CHAT_FONT_SIZE = 13;
-
-// Default chat input font stack, used when theme bodyFontFamily is unavailable.
-const CHAT_FONT_FAMILY_STACK_DEFAULT =
-  "'IBM Plex Serif', Georgia, " +
-  "'Microsoft YaHei UI', 'Microsoft YaHei', " +
-  "'PingFang SC', system-ui, serif";
-
 function sanitizeFontFamilyValue(raw) {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
   if (trimmed.length === 0) return null;
-  // Reject characters that can terminate or corrupt a single persisted
-  // font-family setting value when forwarded into settings.json or CSS.
+  // Reject characters that can terminate or corrupt the generated CSS
+  // variable block.
   if (/[;{}\r\n]/.test(trimmed)) {
     return null;
   }
   return trimmed;
 }
-
-function buildChatFontFamilyStack(theme) {
-  const bodyCss = theme && theme.bodyFontFamily && theme.bodyFontFamily.css;
-  const sanitized = sanitizeFontFamilyValue(bodyCss);
-  if (sanitized) {
-    return sanitized;
-  }
-  return CHAT_FONT_FAMILY_STACK_DEFAULT;
-}
-
-// The complete list of VS Code user settings keys that `setChatFontToSerif`
-// may write. Exposed for the backup module so that it can snapshot these
-// keys surgically (capturing each key's pre-apply value, or a tombstone
-// marking "did not exist") instead of storing the entire settings.json
-// as a blob. Keeping this list here — next to the code that actually
-// writes the keys — is how we guarantee backup and apply stay in sync.
-const CHAT_FONT_SETTING_KEYS = Object.freeze(['chat.fontFamily', 'chat.fontSize']);
 
 // ============================================================
 // regexes
@@ -770,62 +740,6 @@ function installSerifSystemFonts(resourceRoot) {
 }
 
 // ============================================================
-// settings.json: `chat.fontFamily` / `chat.fontSize`
-// ============================================================
-
-// Return whether either setting changed. `fontSize` must be one of the
-// discrete body-size options; the caller is expected to pass `getTheme()
-// .bodyFontSize` but a stray value falls back to the default. `theme` is
-// used to read the configured body font family for the chat input stack.
-// Explicit `settingsPath` overrides the platform-default fallback — that
-// is how custom (Cursor / Scoop / portable) targets get their settings.json.
-function setChatFontToSerif(fontSize, theme, settingsPath) {
-  const size = BODY_FONT_SIZE_OPTIONS.includes(fontSize) ? fontSize : CHAT_FONT_SIZE;
-  const fontFamily = buildChatFontFamilyStack(theme);
-  const path_ = settingsPath || vscodeUserSettingsPath();
-  return writeChatFontSettings(path_, size, fontFamily);
-}
-
-function writeChatFontSettings(settingsPath, size, fontFamily) {
-  const parent = path.dirname(settingsPath);
-  if (!fs.existsSync(parent)) {
-    // Skip when the VS Code user settings directory does not exist yet.
-    return false;
-  }
-
-  let data = {};
-  if (fs.existsSync(settingsPath)) {
-    try {
-      const text = fs.readFileSync(settingsPath, 'utf8');
-      data = text.trim() ? JSON.parse(text) : {};
-    } catch (_) {
-      // Skip JSONC or other non-JSON content rather than overwriting it.
-      return false;
-    }
-    if (data === null || typeof data !== 'object' || Array.isArray(data)) {
-      return false;
-    }
-  }
-
-  if (
-    data['chat.fontFamily'] === fontFamily &&
-    data['chat.fontSize'] === size
-  ) {
-    return false;
-  }
-
-  data['chat.fontFamily'] = fontFamily;
-  data['chat.fontSize'] = size;
-  fs.mkdirSync(parent, { recursive: true });
-  fs.writeFileSync(
-    settingsPath,
-    JSON.stringify(data, null, 4) + '\n',
-    'utf8',
-  );
-  return true;
-}
-
-// ============================================================
 // `extension.js` / `webview/index.js` patching
 // ============================================================
 
@@ -1334,21 +1248,14 @@ function installClaudeCodeVSCodeEnhance(resourceRoot, options = {}) {
     fs.writeFileSync(target.webviewIndexJsPath, webviewUpdatedText, 'utf8');
   }
 
-  // System fonts plus `chat.fontFamily` / `chat.fontSize`. The settings
-  // path comes from the resolved target so custom Cursor / Scoop /
-  // portable installs write into the right `User/settings.json`.
+  // Install the bundled serif system fonts for hosts that resolve user font
+  // names outside the webview font-face scope. The chat input now follows
+  // the generated webview CSS variables, so apply no longer writes
+  // `chat.fontFamily` / `chat.fontSize` into the host's global settings.
   const serifWritten = installSerifSystemFonts(resourceRoot);
-  const chatFontUpdated = setChatFontToSerif(theme.bodyFontSize, theme, target.settingsPath);
   const serifStatus = serifWritten > 0
     ? `已写入 ${serifWritten}/${SYSTEM_FONT_FILES.length}`
     : `已存在 (${SYSTEM_FONT_FILES.length} 个)`;
-  const chatFontKey = theme.bodyFontFamily && theme.bodyFontFamily.key;
-  const chatFontLabel = chatFontKey === 'custom'
-    ? t('apply.font_custom_value')
-    : chatFontKey || 'plex-serif';
-  const chatFontStatus = chatFontUpdated
-    ? `已更新 → ${chatFontLabel} ${theme.bodyFontSize}px`
-    : '已是目标值';
 
   const statusLines = [
     ...rootResourceStatuses,
@@ -1356,7 +1263,6 @@ function installClaudeCodeVSCodeEnhance(resourceRoot, options = {}) {
     ...extStatusLines,
     ...webviewStatusLines,
     `${padLabel('serif 系统字体')}: ${serifStatus}`,
-    `${padLabel('chat.fontFamily')}: ${chatFontStatus}`,
   ];
 
   return {
@@ -1367,7 +1273,6 @@ function installClaudeCodeVSCodeEnhance(resourceRoot, options = {}) {
     assetFilesWritten: assetWrittenTotal,
     assetFilesTotal: assetTotal,
     serifFontsInstalled: serifWritten,
-    chatFontSettingUpdated: chatFontUpdated,
     report: {
       webviewDir,
       rootWebviewFiles,
@@ -1381,10 +1286,6 @@ function installClaudeCodeVSCodeEnhance(resourceRoot, options = {}) {
         path: target.webviewIndexJsPath,
         updated: webviewUpdated,
         statusLines: webviewStatusLines,
-      },
-      settings: {
-        path: target.settingsPath,
-        updated: chatFontUpdated,
       },
       systemFonts: {
         written: serifWritten,
@@ -1401,7 +1302,6 @@ function installClaudeCodeVSCodeEnhance(resourceRoot, options = {}) {
 module.exports = {
   CLAUDE_CODE_EXTENSION_PREFIX,
   SYSTEM_FONT_FILES,
-  CHAT_FONT_SETTING_KEYS,
   extensionRoot,
   vscodeUserSettingsPath,
   userFontDir,

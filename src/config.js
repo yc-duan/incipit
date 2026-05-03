@@ -44,9 +44,8 @@ const PALETTE_OPTIONS = Object.freeze(['warm-black', 'warm-white']);
 // The labelKey is looked up via i18n; cssValue is the raw font-family stack.
 const BODY_FONT_FAMILY_OPTIONS = Object.freeze([
   ['plex-serif', "'Reading', 'IBM Plex Serif', 'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', system-ui, serif"],
-  ['georgia', "Georgia, 'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', system-ui, serif"],
-  ['system-serif', "system-ui, -apple-system, 'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', serif"],
 ]);
+const RETIRED_BODY_FONT_FAMILY_KEYS = Object.freeze(['georgia', 'system-serif']);
 const CODE_FONT_FAMILY_OPTIONS = Object.freeze([
   ['rec-mono', "'Rec Mono Linear', 'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', Consolas, Monaco, 'Courier New', monospace"],
   ['jetbrains-mono', "'JetBrains Mono', 'Noto Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', Consolas, Monaco, 'Courier New', monospace"],
@@ -175,6 +174,10 @@ function getTheme() {
 function resolveBodyFontFamily(saved) {
   const preset = BODY_FONT_FAMILY_OPTIONS.find(([key]) => key === saved);
   if (preset) return { key: saved, css: preset[1] };
+  if (RETIRED_BODY_FONT_FAMILY_KEYS.includes(saved)) {
+    const def = BODY_FONT_FAMILY_OPTIONS[0];
+    return { key: def[0], css: def[1] };
+  }
   // Custom or missing: fall back to default if no valid custom string.
   if (typeof saved === 'string' && saved.trim().length > 0) {
     return { key: 'custom', css: saved.trim() };

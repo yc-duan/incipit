@@ -105,9 +105,11 @@
   --incipit-body-font: 'Reading', 'IBM Plex Serif', 'Noto Sans SC',
                'Microsoft YaHei UI', 'Microsoft YaHei',
                'PingFang SC', system-ui, serif;
+  --incipit-emphasis-font: 'Emphasis', var(--incipit-body-font);
   --incipit-code-font: 'Rec Mono Linear', 'Noto Sans SC',
                'Microsoft YaHei UI', 'Microsoft YaHei',
                Consolas, Monaco, 'Courier New', monospace;
+  --incipit-conversation-column-width: 570px;
 }
 
 /* ============================================================
@@ -124,6 +126,26 @@
   background-image: none !important;
   isolation: auto !important;
   contain: none !important;
+}
+
+/*
+  Centered conversation column.
+
+  PR #1 correctly removed the inner 64ch cap from paragraphs/lists so flow
+  content can use its container. The missing outer piece is that, in the
+  fullscreen conversation editor, the message containers themselves expand to
+  the whole viewport: assistant prose sticks to the far left, while user
+  bubbles run to the far right. Keep the inner blocks fluid, but cap and center
+  the actual conversation rows so wide windows read like a stable page.
+*/
+[data-incipit-message],
+[data-incipit-user-message-container],
+[data-incipit-spinner-row] {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: var(--incipit-conversation-column-width) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
 }
 
 /* ============================================================
@@ -361,7 +383,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
    hierarchy collapses H1 onto H2. Margins keep a touch more breathing room
    than H2 so consecutive sections still feel delineated. */
 [data-incipit-message] h1 {
-  font-family: var(--incipit-body-font) !important;
+  font-family: var(--incipit-emphasis-font) !important;
   font-size: 15px;
   font-weight: 400;
   margin: 1.8em 0 0.45em;
@@ -369,7 +391,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   letter-spacing: -0.008em;
 }
 [data-incipit-message] h2 {
-  font-family: var(--incipit-body-font) !important;
+  font-family: var(--incipit-emphasis-font) !important;
   font-size: 15px;
   font-weight: 400;
   margin: 1.5em 0 0.4em;
@@ -377,7 +399,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   letter-spacing: -0.008em;
 }
 [data-incipit-message] h3 {
-  font-family: var(--incipit-body-font) !important;
+  font-family: var(--incipit-emphasis-font) !important;
   font-size: 14px;
   font-weight: 400;
   margin: 1.2em 0 0.3em;
@@ -385,27 +407,28 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   letter-spacing: -0.004em;
 }
 [data-incipit-message] h4 {
-  font-family: var(--incipit-body-font) !important;
+  font-family: var(--incipit-emphasis-font) !important;
   font-size: 1em;
   font-weight: 400;
   margin: 0.9em 0 0.2em;
 }
 [data-incipit-message] h5,
 [data-incipit-message] h6 {
-  font-family: var(--incipit-body-font) !important;
+  font-family: var(--incipit-emphasis-font) !important;
   font-size: 1em;
   font-weight: 400;
   margin: 0.8em 0 0.2em;
 }
 
 /* ============================================================
-   Inline `strong` / `b` use the body font with `font-weight: 400`
-   so the browser picks the real semibold font file instead of
-   synthetic bold.
+   Inline `strong` / `b` use the emphasis face at `font-weight: 400`
+   so the browser picks the real semibold font file instead of synthetic
+   bold. Do not route built-in emphasis through the configurable body face;
+   the default weight hierarchy is part of the design contract.
    ============================================================ */
 [data-incipit-message] strong,
 [data-incipit-message] b {
-  font-family: var(--incipit-body-font) !important;
+  font-family: var(--incipit-emphasis-font) !important;
   font-weight: 400 !important;
 }
 
@@ -551,20 +574,33 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
   line-height: 1.5 !important;
 }
 
-/* Keep the real contenteditable input untouched.
-   Input font settings are applied through `chat.fontFamily` in
-   `settings.json`. Only the non-editable placeholder keeps the serif body
-   face here. */
-[data-incipit-input-editor]::before,
-[data-incipit-input-editor]::before,
+/* The input editor follows the body face through webview CSS now. Keep this
+   deliberately narrow: font family/size only, no DOM, composition, caret,
+   line-height, or mention-chip geometry changes. */
+[data-incipit-input-editor] {
+  font-family: var(--incipit-body-font) !important;
+  font-size: var(--incipit-body-size, 13px) !important;
+}
 [data-incipit-input-editor]::before {
   font-family: var(--incipit-body-font) !important;
 }
+[data-incipit-input-container] [class*="messageInput"][contenteditable],
+[data-incipit-input-container] [class*="mentionMirror"] {
+  font-family: var(--incipit-body-font) !important;
+  font-size: var(--incipit-body-size, 13px) !important;
+}
+[data-incipit-input-container] [class*="messageInput"][contenteditable]:empty::before,
+[data-incipit-input-container] [class*="messageInput"][contenteditable]::placeholder {
+  font-family: var(--incipit-body-font) !important;
+  font-size: var(--incipit-body-size, 13px) !important;
+  color: rgba(248, 248, 246, 0.46) !important;
+  opacity: 1 !important;
+}
 
-/* Tool headers use the body font with `font-weight: 400` so the browser
+/* Tool headers use the emphasis face with `font-weight: 400` so the browser
    picks the real semibold font file instead of synthetic bold. */
 [data-incipit-tool-name] {
-  font-family: var(--incipit-body-font) !important;
+  font-family: var(--incipit-emphasis-font) !important;
   font-size: var(--incipit-body-size, 13px) !important;
   font-weight: 400 !important;
   font-variation-settings: normal;
@@ -796,7 +832,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
    sibling Edit/Read entries on the same row. */
 [data-incipit-tool-grep-filename] {
   margin-left: 0.4em;
-  font-family: var(--incipit-body-font);
+  font-family: var(--incipit-emphasis-font);
   font-weight: 400;
   font-style: normal;
   font-variation-settings: initial;
@@ -1078,7 +1114,7 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
    span is only for missing header paths. */
 [data-incipit-tool-filepath] {
   margin-left: 0.4em;
-  font-family: var(--incipit-body-font);
+  font-family: var(--incipit-emphasis-font);
   font-weight: 400;
   font-style: normal;
   font-variation-settings: initial;
@@ -2091,7 +2127,7 @@ pre code {
 [data-incipit-markdown-root] table thead th,
 [data-incipit-message] table thead th {
   border-bottom: 1.5px solid rgba(220, 210, 190, 0.45) !important;
-  font-family: var(--incipit-body-font) !important;
+  font-family: var(--incipit-emphasis-font) !important;
   font-weight: 400 !important;
   color: rgba(248, 248, 246, 0.72);
   padding-bottom: 6px !important;
@@ -2428,6 +2464,56 @@ pre code {
   box-shadow: 0 12px 36px rgba(0,0,0,0.55),
               0 2px 8px rgba(0,0,0,0.35) !important;
   border-radius: 10px !important;
+}
+[data-incipit-menu-popup],
+[data-incipit-menu-popup] button,
+[data-incipit-menu-popup] input,
+[data-incipit-menu-popup] textarea,
+[data-incipit-dropdown],
+[data-incipit-dropdown] button,
+[data-incipit-dropdown] input,
+[data-incipit-dropdown] textarea {
+  font-family: var(--incipit-body-font) !important;
+}
+[data-incipit-menu-popup] input,
+[data-incipit-menu-popup] textarea,
+[data-incipit-menu-popup] [class*="filterInput"],
+[data-incipit-dropdown] input,
+[data-incipit-dropdown] textarea {
+  background: #1f1f1e !important;
+  background-color: #1f1f1e !important;
+  color: #f8f8f6 !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  font-size: var(--incipit-body-size, 13px) !important;
+  line-height: 1.45 !important;
+}
+[data-incipit-menu-popup] input::placeholder,
+[data-incipit-menu-popup] textarea::placeholder,
+[data-incipit-menu-popup] [class*="filterInput"]::placeholder,
+[data-incipit-dropdown] input::placeholder,
+[data-incipit-dropdown] textarea::placeholder {
+  color: rgba(248, 248, 246, 0.42) !important;
+  opacity: 1 !important;
+  font-family: inherit !important;
+}
+[data-incipit-menu-popup] [class*="sectionHeader"],
+[data-incipit-menu-popup] [class*="sectionTitle"] {
+  color: #bcbcb9 !important;
+  opacity: 0.72 !important;
+  font-family: var(--incipit-body-font) !important;
+  font-size: calc(var(--incipit-body-size, 13px) - 1px) !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+[data-incipit-menu-popup] [class*="modelIndicator"],
+[data-incipit-input-footer] [class*="modelIndicator"] {
+  color: #bcbcb9 !important;
+  opacity: 0.8 !important;
+  font-family: var(--incipit-body-font) !important;
+  font-size: calc(var(--incipit-body-size, 13px) - 1px) !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
 }
 [data-incipit-user-bubble] {
   background: #121212 !important;
@@ -2784,7 +2870,7 @@ pre code {
   border: none;
   border-radius: 5px;
   color: inherit;
-  font-family: var(--incipit-body-font) !important;
+  font-family: var(--incipit-emphasis-font) !important;
   font-size: inherit;
   line-height: inherit;
   font-weight: 400;
@@ -3363,7 +3449,7 @@ pre code {
   display: block;
 }
 .cceStatHeading {
-  font-family: var(--incipit-body-font);
+  font-family: var(--incipit-emphasis-font);
   font-size: 11px;
   font-weight: 400;
   text-transform: uppercase;
