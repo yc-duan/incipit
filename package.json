@@ -1,6 +1,6 @@
 {
   "name": "incipit",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "A frontend rework of the official Claude Code VS Code extension — surface redrawn, engine untouched.",
   "bin": {
     "incipit": "bin/cli.js"

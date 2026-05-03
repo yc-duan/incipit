@@ -185,7 +185,14 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 }
 
 
-/* Limit reading width to 64ch for the narrower webview measure. */
+/*
+  Full-width flow content.
+
+  Paragraphs, lists, and blockquotes should span the available container
+  width in both the markdown root and message body. `width: 100%` makes these
+  block elements fill the container, and `box-sizing: border-box` keeps any
+  padding or borders within that width.
+*/
 [data-incipit-markdown-root] > p,
 [data-incipit-markdown-root] > ul,
 [data-incipit-markdown-root] > ol,
@@ -194,7 +201,8 @@ details[data-incipit-thinking]:not([open]) > summary[data-incipit-thinking-summa
 [data-incipit-message] > ul,
 [data-incipit-message] > ol,
 [data-incipit-message] > blockquote {
-  max-width: 64ch;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Apply the body face across text elements. `unicode-range` routes Latin to
